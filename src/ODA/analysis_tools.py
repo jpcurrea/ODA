@@ -2334,6 +2334,8 @@ class CTStack(Stack):
         else:
             polar = rectangular_to_spherical(self.points[:])
             theta, phi, radii = polar.T
+            pts = Points(arr=pts, polar=polar, sphere_fit=False, rotate_com=False,
+                         spherical_conversion=False)
             pts.surface_predict(xvals=(theta), yvals=(phi))
             predicted_radii = pts.surface
             residuals = radii - predicted_radii
