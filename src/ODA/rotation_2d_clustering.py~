@@ -1,0 +1,40 @@
+# make a class to use 2d clustering on a 3d dataset using 2d projection and kmeans
+class RotateClusterer():
+    def __init__(self, pts_3d, centers_3d):
+        """Allows for clustering 3D data based on all possible 2D rotation projections.
+
+
+        Consider the set of all rotations of a 3D coordinate cloud. If this cloud
+        contains cylindrical clusters all roughly parallel, then there should be only
+        2 rotations that allow collapsing along the longitudinal axis of the cylinders. 
+        Thus, the points can be more easily clustered in those 2D projections once their
+        known.
+
+        pts_3d : np.ndarray, shape=(N, 3)
+            The array of 3D coorinates used in the clustering algorithm.
+        centers_3d : np.ndarray, shape=(k, 3)
+            The array 3D centroids used for clustering.
+        """
+        self.pts = np.copy(pts_3d)
+        self.centers = np.copy(centers_3d)
+        
+    def error(self, pts_2d, centers_2d, d_theta, d_phi):
+        
+# rotate the points
+def error(pts_2d, centers_2d):
+    """Use Kmeans to cluster pts_2d around centers_2d"""
+    clusterer = cluster.KMeans(len(centers_2d), init=centers_2d, n_init=1)
+    lbls = clusterer.fit_predict(pts_2d)
+    # the optimal response should minimize the inertia of the kmeans algorithm
+    error = clusterer.inertia
+    return error
+
+def rotation_clustering(pts, centers):
+    pts = np.copy(pts)          # copy to maintain original array
+    centers = np.copy(centers)
+    com = pts.mean(0)       # get the center of mass
+    pts -= pts.mean(0)          # center the points for rotations later on
+    centers -= centers.mean(0)          # center the points for rotations later on
+    # rotate pts and centers so that pts are projected onto the approximate 
+    # plane formed by the centers
+    uu, dd, vv = np.linalg.svd(centers)

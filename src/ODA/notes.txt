@@ -1,0 +1,1 @@
+consider all possible inputs into the load function. If an array was provided directly, use that. If that input is not

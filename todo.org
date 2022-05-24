@@ -1,0 +1,26 @@
+* DONE setup for pip install of the library
+CLOSED: [2021-12-07 Tue 00:42]
+- CLOSING NOTE [2021-12-07 Tue 00:42] \\
+  Nearly there! I just need to finilize the documentation (check that all docstrings are up to date and that all functions have docstrings). Make sure to remove redundant docstrings. Upload to both github and pypi.
+** test on local virtual environment
+** test on a separate computer
+** test on binder
+* TODO define benchmark function to profile the workflows 1 and 3 for the following information
+** duration (mean +/- s.d.) per stage
+** ommatidia count (mean +/- s.d.)
+** ommatidia diameter (mean +/- s.d.)
+** plot the original image, the reciprocal, the smoothed reciprocal, and the final image with ommatidia superimposed
+* TODO define 3 different noise functions
+** resolution reduction by binning
+** resolution reduction by gaussian blur
+** SNR reduction by Poisson
+* TODO for each of the following images, apply the 3 noise functions with increasing intensity (effectively larger bins for #1 and broader PDFs for #s 1 and 2) and benchmark each one
+** ant eye replicas (smallest and largest with range of diameters)
+** SEM images of Drosophila eyes
+** fruit fly direct micrographs 
+** flattened CT stack (segment)
+** spider retina
+* TODO test GUI for 3 different workflows:
+** 1. ODA 2D (single image)
+** 2. ODA stack (stack of micrographs)
+** 3. ODA 3D (example: CT stack)
