@@ -1,10 +1,6 @@
-import sys
-sys.path.append("../src/")
+# import sys
+# sys.path.append("../src/")
 from ODA import *
-# from analysis_tools import *
-# from ODA import *
-
-
 
 # test out Layer object using a stored image file
 img = Layer("./002.jpg")
@@ -32,5 +28,5 @@ eye.crop_eye(use_ellipse_fit=True)
 cropped_eye = eye.eye
 # run the ommatidia_detecting_algorithm
 cropped_eye.oda(bright_peak=False, high_pass=True, plot=True,
-                plot_fn='./002_ommatidia.svg')
+                plot_fn='./002_ommatidia.svg', manual_edit=True)
  

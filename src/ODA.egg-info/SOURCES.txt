@@ -34,10 +34,8 @@ src/ODA.egg-info/top_level.txt
 tests/002.jpg
 tests/002.memmap
 tests/002_ommatidia.svg
-tests/_compound_eye_data.h5
 tests/desktop.ini
 tests/mask.jpg
-tests/test.py
 tests/test.py~
 tests/test_CT.py
 tests/test_CT.py~

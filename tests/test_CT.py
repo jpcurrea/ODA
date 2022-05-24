@@ -1,9 +1,7 @@
 """Test script for processing a CT stack.
 """
 # import sys
-# sys.path.append("h:\\My Drive\\backup\\Desktop\\programs\\eye_tools\\src\\eye_tools")
-# sys.path = sys.path[1:]
-# from analysis_tools import *
+# sys.path.append("../src/")
 from ODA import *
 # import logging
 # logging.basicConfig(level=logging.DEBUG)

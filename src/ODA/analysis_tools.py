@@ -2044,7 +2044,7 @@ class EyeStack(Stack):
             plot=plot,
             plot_fn=plot_fn,
             manual_edit=manual_edit)
-        ys, xs = self.eye.ommatidial_inds.T
+        ys, xs = self.eye.ommatidial_inds.T.astype(int)
         zs = self.heights[ys, xs]
         ys, xs = self.eye.ommatidia.T
         new_ommatidia = np.array([ys, xs, zs]).T
