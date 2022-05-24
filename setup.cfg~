@@ -1,0 +1,37 @@
+[metadata]
+name = ODA
+version = 2021.4.18.22
+author = John Paul Currea
+author_email = johnpaulcurrea@gmail.com
+description = Image analysis tools for extracting optical parameters of compound eyes.
+long_description = file: README.md
+long_description_content_type = text/markdown
+url = https://github.com/jpcurrea/ODA
+project_urls =
+    Documentation = https://jpcurrea.github.io/ODA/,
+    Source = https://github.com/jpcurrea/ODA
+classifiers =
+    Programming Language :: Python :: 3
+    License :: OSI Approved :: MIT License
+    Operating System :: OS Independent
+
+[options]
+package_dir =
+    = src
+packages = find:
+python_requires = >=3.6
+install_requres =
+    h5py
+    matplotlib
+    numpy
+    pillow
+    pandas
+    seaborn
+    scikit-image
+    scikit-learn
+    scipy
+    PyQt5
+    pyqtgraph
+
+[options.packages.find]
+where = src

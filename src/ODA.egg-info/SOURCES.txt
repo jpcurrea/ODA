@@ -3,6 +3,7 @@ MANIFEST.in
 README.md
 pyproject.toml
 setup.cfg
+setup.py
 data/002.jpg
 data/002.memmap
 data/002_ommatidia.svg
@@ -27,6 +28,8 @@ src/ODA/rotation_2d_clustering.py
 src/ODA.egg-info/PKG-INFO
 src/ODA.egg-info/SOURCES.txt
 src/ODA.egg-info/dependency_links.txt
+src/ODA.egg-info/desktop.ini
+src/ODA.egg-info/requires.txt
 src/ODA.egg-info/top_level.txt
 tests/002.jpg
 tests/002.memmap

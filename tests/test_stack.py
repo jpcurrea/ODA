@@ -1,4 +1,7 @@
-from analysis_tools import *
+import sys
+sys.path.append("../src/")
+from ODA import *
+
 
 PIXEL_SIZE = (488.84896*2)**-1
 DEPTH_SIZE = .004*3            # from the manual; we used to use .0042
@@ -12,5 +15,5 @@ DEPTH_SIZE = .004*3            # from the manual; we used to use .0042
 # import an eyestack
 eye_stack = EyeStack(dirname="002", img_extension='.JPG',
                      pixel_size=PIXEL_SIZE, depth_size=DEPTH_SIZE)
-eye_stack.oda_3d(bright_peak=False, plot=True)
+eye_stack.oda_3d(bright_peak=False, plot=True, manual_edit=True)
 

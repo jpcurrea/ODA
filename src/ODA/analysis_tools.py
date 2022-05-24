@@ -31,7 +31,7 @@ rgb_2_gray(rgb) : np.ndarray
 """
 from functools import partial
 import h5py
-from interfaces import *
+from .interfaces import *
 import math
 import matplotlib
 from matplotlib import colors, mlab
@@ -1113,10 +1113,9 @@ class Layer:
                     memmap_fn = self.filename.replace(file_ext, '.memmap')
                 elif os.path.exists(memmap_fn):
                     memmap = np.memmap(memmap_fn, mode='r+', shape=(self.image.shape))
-                else:
-                    memmap = np.memmap(memmap_fn,
-                      dtype='uint8', mode='w+', shape=(self.image.shape))
-                    memmap[:] = self.image[:]
+                memmap = np.memmap(memmap_fn,
+                  dtype='uint8', mode='w+', shape=(self.image.shape))
+                memmap[:] = self.image[:]
                 self.image = memmap
 
     def save(self, pickle_fn):
@@ -2046,7 +2045,7 @@ class EyeStack(Stack):
             plot_fn=plot_fn,
             manual_edit=manual_edit)
         ys, xs = self.eye.ommatidial_inds.T
-        zs = self.heights[(ys, xs)]
+        zs = self.heights[ys, xs]
         ys, xs = self.eye.ommatidia.T
         new_ommatidia = np.array([ys, xs, zs]).T
         self.eye.ommatidia = new_ommatidia

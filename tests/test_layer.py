@@ -1,5 +1,8 @@
-sys.path.append("g:/.shortcut-targets-by-id/1as1j06Ce9KOwHXHd8ujnPqBpqZGP503z/backup/Desktop/programs/eye_tools/src/eye_tools")
-from analysis_tools import *
+import sys
+sys.path.append("../src/")
+from ODA import *
+# from analysis_tools import *
+# from ODA import *
 
 
 
