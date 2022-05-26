@@ -34,12 +34,16 @@ src/ODA.egg-info/top_level.txt
 tests/002.jpg
 tests/002.memmap
 tests/002_ommatidia.svg
+tests/__init__.py
+tests/__init__.py~
 tests/coords.npy
 tests/desktop.ini
 tests/mask.jpg
 tests/test.py~
 tests/test_CT.py
 tests/test_CT.py~
+tests/test_all.py
+tests/test_all.py~
 tests/test_layer.py
 tests/test_layer.py~
 tests/test_stack.py
