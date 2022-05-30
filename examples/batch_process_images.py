@@ -29,7 +29,7 @@ import pandas as pd
 
 # Custom parameters
 # if a list, must be one-to-one with images
-BRIGH_PEAK = False             # True assumes a bright point for every peak
+BRIGHT_PEAK = False             # True assumes a bright point for every peak
 HIGH_PASS = True               # True adds a high-pass filter to the low-pass used in the ODA
 SQUARE_LATTICE = True          # True assumes only two fundamental gratings
 FILE_EXTENSION = ".jpg"        # assumes you're only interested in this file extension

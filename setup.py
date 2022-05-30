@@ -12,6 +12,5 @@ setup(
         'scipy',
         'PyQt5',
         'PyOpenGL',
-        'PyOpenGL_accelerate',
         'pyqtgraph']
     )
