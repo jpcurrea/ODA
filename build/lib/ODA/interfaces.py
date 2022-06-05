@@ -197,7 +197,7 @@ class VarSummary():
         grid = scipy.interpolate.griddata(self.pts[no_nans],
                                           self.colorvals[no_nans],
                                           np.array([xvals, yvals]).T,
-                                          method='linear')
+                                          method='nearest')
         grid = grid.astype(float)
         mask = np.histogram2d(self.pts[:, 0], self.pts[:, 1],
                               bins=[grid.shape[0], grid.shape[1]])
@@ -352,6 +352,7 @@ class VarSummary():
         # self.heatmap = self.heatmap_ax.scatter(
         #     self.x, self.y, c=self.colorvals, cmap=self.cmap,
         #     vmin=self.cmin, vmax=self.cmax)
+        # breakpoint()
         if self.vmin is not None:
             cmin = self.vmin
         else:
@@ -437,20 +438,19 @@ class VarSummary():
                 #     self.heatmap_ax.indicate_inset_zoom(self.heatmap_axins, edgecolor='k')
                 #     mark_inset(self.heatmap_ax, self.heatmap_axins, loc1=2, loc2=4,
                 #                fc='none', ec='k', lw=.5)
-                if inset:
-                    self.circles = []
-                    for num, (color, radius, x, y) in enumerate(zip(
-                            colors, self.marker_sizes, self.x, self.y)):
-                        circle = plt.Circle((x, y), radius=radius, color=color)
-                        self.circles += [circle]
-                        self.heatmap_ax.add_artist(circle)
-                        if inset:
-                            include = np.all([
-                                x >= xmin_inset - padding, x <= xmax_inset + padding,
-                                y >= ymin_inset - padding, y <= ymax_inset + padding])
-                            if include:
-                                circle = plt.Circle((x, y), radius=radius, color=color)
-                                self.heatmap_axins.add_artist(circle)
+                self.circles = []
+                for num, (color, radius, x, y) in enumerate(zip(
+                        colors, self.marker_sizes, self.x, self.y)):
+                    circle = plt.Circle((x, y), radius=radius, color=color)
+                    self.circles += [circle]
+                    self.heatmap_ax.add_artist(circle)
+                    if inset:
+                        include = np.all([
+                            x >= xmin_inset - padding, x <= xmax_inset + padding,
+                            y >= ymin_inset - padding, y <= ymax_inset + padding])
+                        if include:
+                            circle = plt.Circle((x, y), radius=radius, color=color)
+                            self.heatmap_axins.add_artist(circle)
                 # for x, y, c
             # todo: use plt.Circles instead so that we can specify the area in data units
             # self.circles = []

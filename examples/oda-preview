@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """A command line tool to preview ODA results in 3D."""
 from ODA import CTStack
 import sys

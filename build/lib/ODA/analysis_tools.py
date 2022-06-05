@@ -2125,10 +2125,13 @@ class CTStack(Stack):
             os.path.join(self.dirname, 'interommatidial_data.pkl')]
         for var, fn in zip(['ommatidial_data', 'interommatidial_data'],
                            files_to_load):
-            if var in dir(self):
-                delattr(self, var)
-            if os.path.exists(fn):
-                setattr(self, var, pd.read_pickle(fn))
+            try:
+                if var in dir(self):
+                    delattr(self, var)
+                if os.path.exists(fn):
+                    setattr(self, var, pd.read_pickle(fn))
+            except:
+                print(f"failed to load {var}")
 
     def save_database(self):
         """Save the H5PY database."""
@@ -2334,6 +2337,8 @@ class CTStack(Stack):
         else:
             polar = rectangular_to_spherical(self.points[:])
             theta, phi, radii = polar.T
+            pts = Points(arr=pts, polar=polar, sphere_fit=False, rotate_com=False,
+                         spherical_conversion=False)
             pts.surface_predict(xvals=(theta), yvals=(phi))
             predicted_radii = pts.surface
             residuals = radii - predicted_radii
@@ -2789,6 +2794,7 @@ class CTStack(Stack):
             data_to_save[var] = arr
         # make into a pandas dataframe
         ommatidial_data = pd.DataFrame(data_to_save)
+        ommatidial_data = ommatidial_data.loc[1:]
         # lbls = ommatidial_data.label.values
         # ommatidial_data = ommatidial_data[lbls > 0]
         # save as csv

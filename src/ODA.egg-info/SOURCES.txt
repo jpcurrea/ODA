@@ -19,6 +19,7 @@ examples/batch_process_images.py
 examples/batch_process_stacks.py
 examples/batch_stacks.py
 examples/desktop.ini
+examples/stack_preview.py
 src/ODA/__init__.py
 src/ODA/__main__.py
 src/ODA/analysis_tools.py

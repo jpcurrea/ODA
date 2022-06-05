@@ -12,5 +12,6 @@ setup(
         'scipy',
         'PyQt5',
         'PyOpenGL',
-        'pyqtgraph']
+        'pyqtgraph'],
+    script=['./examples/oda-preview']
     )
