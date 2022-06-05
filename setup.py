@@ -13,5 +13,5 @@ setup(
         'PyQt5',
         'PyOpenGL',
         'pyqtgraph'],
-    script=['./examples/oda-preview']
+    script=['examples/oda-preview']
     )
