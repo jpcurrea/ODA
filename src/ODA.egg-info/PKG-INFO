@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: ODA
-Version: 2022.5.24.4
+Version: 2022.6.5.1
 Summary: Analysis tools for extracting optical parameters of compound eyes from images.
 Home-page: https://github.com/jpcurrea/ODA
 Author: John Paul Currea
@@ -10,7 +10,7 @@ Project-URL: Source, https://github.com/jpcurrea/ODA
 Classifier: Programming Language :: Python :: 3
 Classifier: License :: OSI Approved :: MIT License
 Classifier: Operating System :: OS Independent
-Requires-Python: >=3.8
+Requires-Python: >=3.6
 Description-Content-Type: text/markdown
 License-File: LICENSE
 

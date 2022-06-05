@@ -39,6 +39,7 @@ tests/__init__.py~
 tests/coords.npy
 tests/desktop.ini
 tests/mask.jpg
+tests/temp_database.h5
 tests/test.py~
 tests/test_CT.py
 tests/test_CT.py~
