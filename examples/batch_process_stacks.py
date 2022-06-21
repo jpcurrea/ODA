@@ -26,9 +26,10 @@ import os
 from scipy import misc
 from analysis_tools import *
 
+IMG_EXTENSION = ".jpg"
 # load filenames and folders
 fns = os.listdir(os.getcwd())
-img_fns = [fn for fn in fns if fn.endswith(".jpg")]
+img_fns = [fn for fn in fns if fn.endswith(IMG_EXTENSION)]
 folders = [fn for fn in fns if os.path.isdir(fn)]
 folders = [os.path.join(os.getcwd(), f) for f in folders]
 # for each folder
@@ -41,7 +42,7 @@ for folder in folders:
         path, base = os.path.split(folder)
         stack_name = "{}.jpg".format(base) # 
         # get the focus stack
-        st = Stack(folder, f_type=".TIF")
+        st = Stack(folder, img_extension=IMG_EXTENSION)
         st.load()
         st.get_focus_stack()
         # save if the stack worked
