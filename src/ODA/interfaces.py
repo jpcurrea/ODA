@@ -114,11 +114,11 @@ class VarSummary():
             self.ymax = self.y.max()
         else:
             self.ymax = ymax - self.y_offset
-        if vmin is None:
+        if vmin is None and self.vmin is None:
             self.vmin = self.colorvals.min()
         else:
             self.vmin = vmin
-        if vmax is None:
+        if vmax is None and self.vmax is None:
             self.vmax = self.colorvals.max()
         else:
             self.vmax = vmax
