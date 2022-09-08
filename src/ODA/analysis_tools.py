@@ -31,7 +31,8 @@ rgb_2_gray(rgb) : np.ndarray
 """
 from functools import partial
 import h5py
-from .interfaces import *
+# from .interfaces import *
+from interfaces import *
 import math
 import matplotlib
 from matplotlib import colors, mlab
@@ -794,7 +795,7 @@ class Points:
             self.residuals = self.radii - self.radius
 
     def rasterize(self, polar=True, axes=[0, 1], image_size=10000, weights=None,
-                  pixel_length=None):
+                  pixel_length=None, project=False):
         """Rasterize coordinates onto a grid defined by min and max vals.
 
         Parameters
@@ -808,6 +809,8 @@ class Points:
         pixel_length : float, default=None
             Alternative method of specifying the grid based on the pixel length, as 
             opposed to image size. This overrides the image size.
+        project : bool, default=False
+            Whether to project the points onto the fitted surface in a non-linear way.
 
         Returns
         -------
@@ -842,6 +845,57 @@ class Points:
         ys = ys[:-1] + self.raster_pixel_length / 2.0
         self.xvals, self.yvals = xs, ys
         return (self.raster, (xs, ys))
+
+    def surface_projection(self, image_size=10000):
+        """Rasterize coordinates onto a grid defined by min and max vals.
+
+        Parameters
+        ----------
+        image_size : int, default=1e4
+            The number of pixels in the image.
+
+        Returns
+        -------
+        raster : np.ndarray
+            The 2D histogram of the points, optionally weighted by self.vals.
+        (xs, ys) : tuple
+            The x and y coordinates marking the boundaries of each pixel. 
+            Useful for rendering as a pyplot.pcolormesh.
+        """
+        # 1. fit a surface to the points in polar coordinates, approximating radius
+        # as the average radius of points within a cell of a grid
+        self.fit_surface(polar=True, image_size=1e6)
+        # 2. convert surface to recangular coordinates
+        surface = spherical_to_rectangular(self.avg)
+        theta, phi, radii = self.avg.T
+        # 3. for each point, find the nearest point on the surface
+        # each projection point should have the 
+        dist_tree = spatial.KDTree(surface)
+        dists, inds = dist_tree.query(self.pts) # inds point to the nearest points in surface
+        proj_radii = radii[inds]
+        dists[self.radii < proj_radii] *= -1
+        # todo: try using linear interpolation 
+        breakpoint()
+        interp = interpolate.LinearNDInterpolator(
+            surface[:, :2], surface[:, 2])
+        surface_model = interp(self.pts[:, 0], self.pts[:, 1])
+
+        no_nans = np.isnan(cubic_surface) == False
+        self.surface[sort_inds][no_nans] = cubic_surface[no_nans]
+        
+
+        # make projected coordinates using the polar angles of the surface points
+        # nearest each element
+        proj_theta, proj_phi = theta[inds], phi[inds]
+        proj_coords = np.array([proj_theta, proj_phi, dists]).T
+        fig, axes = plt.subplots(ncols=2, sharex=True, sharey=True)
+        axes[0].scatter(proj_theta, proj_phi, c=dists, marker='.', edgecolor='none',
+                        alpha=.1)
+        axes[1].scatter(self.theta, self.phi, c=self.radii - self.radii.mean(),
+                        marker='.', edgecolor='none', alpha=.1)
+        [ax.set_aspect('equal') for ax in axes]
+        plt.show()
+
 
     def fit_surface(self, polar=True, outcome_axis=0, image_size=10000.0):
         """Cubic interpolate surface of one axis using the other two.
@@ -2500,8 +2554,10 @@ class CTStack(Stack):
                     # get the now centered polar coordinates
                     segment = Points(subset, sphere_fit=False, rotate_com=False,
                                      spherical_conversion=False, polar=polar)
+                    segment.surface_projection()
                     sub_segment = Points((subset[in_shell]), sphere_fit=False, rotate_com=False,
-                                         spherical_conversion=False, polar=polar)
+                                         spherical_conversion=False, polar=polar[in_shell])
+                    sub_segment.surface_projection(image_size=1e6)
                     # find the shortest distances to figure out the necessary pixel size
                     # for our raster image
                     dists_tree = spatial.KDTree(sub_segment.polar[:, :2])
@@ -2952,15 +3008,19 @@ class CTStack(Stack):
                 position = np.array([xgrid.flatten(), ygrid.flatten()])
                 xlen, ylen = xvals[1] - xvals[0], yvals[1] - yvals[0]
                 pixel_area = xlen * ylen
-                # find 2D kernal density estimation 
-                kernal = stats.gaussian_kde(pts_rotated[:, 1:].T)
-                density = kernal(position).reshape((50, 50))
-                density /= density.max() # normalize to maximum
-                # get the area of the 50% density kernal
-                cross_sectional_area = (density > .5).sum() * pixel_area
-                # get the height using the first principle component
-                heights = pts_rotated[:, 0]
-                cross_sectional_height = heights.ptp()
+                try:
+                    # find 2D kernal density estimation 
+                    kernal = stats.gaussian_kde(pts_rotated[:, 1:].T)
+                    density = kernal(position).reshape((50, 50))
+                    density /= density.max() # normalize to maximum
+                    # get the area of the 50% density kernal
+                    cross_sectional_area = (density > .5).sum() * pixel_area
+                    # get the height using the first principle component
+                    heights = pts_rotated[:, 0]
+                    cross_sectional_height = heights.ptp()
+                except:
+                    cross_section_area = np.nan
+                    cross_section_height = np.nan
             else:
                 anatomical_vector = np.array([np.nan, np.nan, np.nan])
                 cross_sectional_area = np.nan
@@ -3529,13 +3589,23 @@ class CTStack(Stack):
         # plt.show()
         # ii. find the cluster center with an angle closest to np.pi/2
         cluster_angles = np.arctan2(cluster_centers[:, 1], cluster_centers[:, 0])
-        horizontal_axis = np.argmin(abs(np.pi/2 - cluster_angles))
+        horizontal_angles = cluster_angles % (2 * np.pi)
+        horizontal_axis = np.argmin(abs(np.pi/2 - horizontal_angles))
+        # horizontal_axis = np.argmin(abs(cluster_angles))
         # iii. rotate everything by the difference between the horizontal axis and np.pi/2
-        ang_diff = np.pi/2 - cluster_angles[horizontal_axis]
+        ang_diff = -(np.pi/2 - cluster_angles[horizontal_axis])
+        # ang_diff = cluster_angles[horizontal_axis]
+        # ang_diff = 0 - cluster_angles[horizontal_axis]
         # test: check that the rotation is correct at every level. for each of the following,
         # check that either the main orientation is around np.pi/2 or that a major ommatidial
         # axis is horizontal when plotted:
         # pair_pts
+        # test_rot = rotate(pair_centers, ang_diff, axis=1).T
+        # fig, axes = plt.subplots(ncols=2)
+        # for ax, vals in zip(axes, [pair_centers, test_rot]):
+        #     ax.scatter(vals[:, 0], vals[:, 2])
+        #     ax.set_aspect('equal')
+        # plt.show()
         pair_pts = rotate(pair_pts, ang_diff, axis=1).T
         pair_axes = rotate(pair_axes, ang_diff, axis=1).T
         pair_axes_smooth = rotate(pair_axes_smooth, ang_diff, axis=1).T
@@ -3619,7 +3689,7 @@ class CTStack(Stack):
         # process interommatidial pairs in vertical and horizontal sections
         print('\nProcessing interommatidial data:')
         for flat_dim, angle_col in zip(
-                [0, 2], ['angle_h', 'angle_v']):
+                [0, 2], ['angle_v', 'angle_h']):
             # find limits of the flattened dimension
             flat_vals = pair_centers[(..., flat_dim)]
             limits = np.linspace(flat_vals.min(), flat_vals.max(), num_slices)
@@ -4466,9 +4536,9 @@ class CTStack(Stack):
             polar = rectangular_to_spherical(pos_vectors)
             theta, phi, radii = polar.T
         # swap horizontal and vertical angles for the plots below
-        angles_v = np.copy(interommatidial_data.angle_v.values)
-        interommatidial_data.angle_v = np.copy(interommatidial_data.angle_h.values)
-        interommatidial_data.angle_h = angles_v
+        # angles_v = np.copy(interommatidial_data.angle_v.values)
+        # interommatidial_data.angle_v = np.copy(interommatidial_data.angle_h.values)
+        # interommatidial_data.angle_h = angles_v
         # cluster orientations into 3 groups
         clusterer = cluster.KMeans(
             3, init=np.array([0, np.pi/2, np.pi])[:, np.newaxis], n_init=1).fit(
@@ -4591,6 +4661,23 @@ class CTStack(Stack):
         sbn.despine(ax=img_ax, left=True, trim=True)
         plt.tight_layout()
         plt.show()
+        # plot the interommatidial diameters by their orientation like the total IO angles
+        # breakpoint()
+        # BINS = [np.linspace(-90, 90), np.linspace(diams.min(), np.round(diams.max(), -1), 50)]
+        # pts1 = interommatidial_data[['pt1_x', 'pt1_y', 'pt1_z']].values
+        # pts2 = interommatidial_data[['pt2_x', 'pt2_y', 'pt2_z']].values
+        # diams = np.linalg.norm(pts2 - pts1, axis=-1)
+        # # plot one 2D histogram
+        # fig, axes = plt.subplots(ncols=2, figsize=(3.08, 4), gridspec_kw={'width_ratios':[4, 1]})
+        # no_nans = np.isnan(diams) == False
+        # axes[0].hist2d(orientation[no_nans] * 180 / np.pi,
+        #                diams[no_nans],
+        #                color='k', bins=BINS, cmap=CMAP, edgecolor='none')
+        # axes[0].set_xlabel('Orientation ($\\degree$)')
+        # axes[0].set_xticks([-60, 0, 60])
+        # sbn.despine(ax=axes[0], trim=True)
+        # # plot the flattened histogram of diameters
+        # axes[1].hist(
         # for each interommatidial angle component and total:
         # no_nans = (np.isnan(theta) == False) * (np.isnan(phi) == False)
         # for angs, title in zip([interommatidial_data.angle_h * 180 / np.pi,
@@ -4666,7 +4753,8 @@ class CTStack(Stack):
             fig = None
             if figsize is not None:
                 fig = plt.figure(figsize=figsize)
-            summary.plot(xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax, fig=fig)
+            summary.plot(xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax, fig=fig,
+                         vmin=vmin, vmax=vmax)
         plt.show()
 
 
@@ -4852,7 +4940,7 @@ class CTStack(Stack):
                         print(f"{num + 1}. {dataset.capitalize()}")
                         choices += [num + 1]
             while stage not in choices + [0, 'last']:
-                stage = input(f"Enter the number {choices} to load from that stage and continue processing, enter 'last', or press 0 to start over: ")
+                stage = input(f"Enter the number {choices} to load from that stage anprocessing, enter 'last', or press 0 to start over: ")
                 try:
                     stage = int(stage)
                 except:
