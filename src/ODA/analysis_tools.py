@@ -880,8 +880,9 @@ class Points:
             surface[:, :2], surface[:, 2])
         surface_model = interp(self.pts[:, 0], self.pts[:, 1])
 
-        no_nans = np.isnan(cubic_surface) == False
-        self.surface[sort_inds][no_nans] = cubic_surface[no_nans]
+        self.surface
+        # no_nans = np.isnan(cubic_surface) == False
+        # self.surface[sort_inds][no_nans] = cubic_surface[no_nans]
         
 
         # make projected coordinates using the polar angles of the surface points
@@ -2148,8 +2149,8 @@ class CTStack(Stack):
         self.load_database()
 
     def __del__(self):
-        self.save_database()
-        self.database.close()
+        # when deleting the object, make sure to close the database
+        self.close_database()
 
     def load_database(self, mode='r+'):
         """Initialize and load the H5 database.
@@ -2187,8 +2188,8 @@ class CTStack(Stack):
             except:
                 print(f"failed to load {var}")
 
-    def save_database(self):
-        """Save the H5PY database."""
+    def close_database(self):
+        """Delete the H5PY database."""
         try:
             self.database.close()
         except:
@@ -2203,6 +2204,10 @@ class CTStack(Stack):
             del self.database
             os.remove(self.database_fn)
             os.rename(temp_fn, self.database_fn)
+
+    def save_database(self):
+        """Save the H5PY database by closing and reopening it."""
+        self.close_database()
         self.load_database()
 
     def prefilter(self, low=0, high=None, folder='_prefiltered_stack', gui=False):
@@ -2554,10 +2559,10 @@ class CTStack(Stack):
                     # get the now centered polar coordinates
                     segment = Points(subset, sphere_fit=False, rotate_com=False,
                                      spherical_conversion=False, polar=polar)
-                    segment.surface_projection()
+                    # segment.surface_projection()
                     sub_segment = Points((subset[in_shell]), sphere_fit=False, rotate_com=False,
                                          spherical_conversion=False, polar=polar[in_shell])
-                    sub_segment.surface_projection(image_size=1e6)
+                    # sub_segment.surface_projection(image_size=1e6)
                     # find the shortest distances to figure out the necessary pixel size
                     # for our raster image
                     dists_tree = spatial.KDTree(sub_segment.polar[:, :2])
@@ -3019,8 +3024,8 @@ class CTStack(Stack):
                     heights = pts_rotated[:, 0]
                     cross_sectional_height = heights.ptp()
                 except:
-                    cross_section_area = np.nan
-                    cross_section_height = np.nan
+                    cross_sectional_area = np.nan
+                    cross_sectional_height = np.nan
             else:
                 anatomical_vector = np.array([np.nan, np.nan, np.nan])
                 cross_sectional_area = np.nan
@@ -4662,22 +4667,57 @@ class CTStack(Stack):
         plt.tight_layout()
         plt.show()
         # plot the interommatidial diameters by their orientation like the total IO angles
-        # breakpoint()
+        breakpoint()
+        pts1 = interommatidial_data[['pt1_x', 'pt1_y', 'pt1_z']].values
+        pts2 = interommatidial_data[['pt2_x', 'pt2_y', 'pt2_z']].values
+        diams = np.linalg.norm(pts2 - pts1, axis=-1)
         # BINS = [np.linspace(-90, 90), np.linspace(diams.min(), np.round(diams.max(), -1), 50)]
-        # pts1 = interommatidial_data[['pt1_x', 'pt1_y', 'pt1_z']].values
-        # pts2 = interommatidial_data[['pt2_x', 'pt2_y', 'pt2_z']].values
-        # diams = np.linalg.norm(pts2 - pts1, axis=-1)
-        # # plot one 2D histogram
-        # fig, axes = plt.subplots(ncols=2, figsize=(3.08, 4), gridspec_kw={'width_ratios':[4, 1]})
-        # no_nans = np.isnan(diams) == False
-        # axes[0].hist2d(orientation[no_nans] * 180 / np.pi,
-        #                diams[no_nans],
-        #                color='k', bins=BINS, cmap=CMAP, edgecolor='none')
-        # axes[0].set_xlabel('Orientation ($\\degree$)')
-        # axes[0].set_xticks([-60, 0, 60])
-        # sbn.despine(ax=axes[0], trim=True)
-        # # plot the flattened histogram of diameters
-        # axes[1].hist(
+        BINS = [np.linspace(-90, 90), np.linspace(0, 40, 50)]
+        # plot one 2D histogram
+        fig, axes = plt.subplots(ncols=2, figsize=(3.08, 4), gridspec_kw={'width_ratios':[4, 1]})
+        axes[0].hist2d(orientation[no_nans] * 180 / np.pi,
+                       diams[no_nans],
+                       color='k', bins=BINS, cmap=CMAP, edgecolor='none')
+        axes[0].set_xlabel('Orientation ($\\degree$)')
+        axes[0].set_xticks([-60, 0, 60])
+        axes[0].set_ylabel("Diameter ($\mu$m)")
+        # plot stats per orientation group
+        img_ax = axes[0]
+        for group_num, group_ori, color in zip(
+                group_set, group_oris, [red, green, blue]):
+            # grab subset of the data
+            # todo: get values and plot in the same loop
+            ori = 180 / np.pi * group_ori
+            # get values of this group
+            inds = groups == group_num
+            sub_vals = diams[inds]
+            # remove nans
+            no_nans = np.isnan(sub_vals) == False
+            sub_vals = sub_vals[no_nans]
+            low, median, high = np.percentile(sub_vals, [25, 50, 75])
+            # bootstrap sub_vals to get 99% CI of the median
+            indices = np.arange(sum(no_nans))
+            indices_random = np.random.choice(indices, (len(sub_vals), 10000), replace=True)
+            meds_random = sub_vals[indices_random]
+            meds_random = np.median(meds_random, axis=1)
+            low_ci, high_ci = np.percentile(meds_random, [.5, 99.5])
+            # make a label for the plotted data per  group
+            label = f"m={median: .2f}\nIQR=[{low: .2f}, {high: .2f}]\nCI=({low_ci: .2f}, {high_ci: .2f})"
+            # plot median +/- IQR
+            img_ax.plot([ori, ori], [low, high], color=color, alpha=.5)
+            img_ax.scatter([ori, ori], [low_ci, high_ci], color=color, marker='_')
+            img_ax.plot(ori, median, marker='.', color=color, label=label)
+        img_ax.legend(fontsize='xx-small')
+        sbn.despine(ax=axes[0], trim=True)
+        # plot the flattened histogram of diameters
+        no_nans = np.isnan(diams) == False
+        axes[1].hist(diams[no_nans], bins=BINS[1], orientation='horizontal', color='k', alpha=1)
+        ymin, ymax = axes[0].get_ylim()
+        axes[1].set_ylim(ymin, ymax)
+        axes[1].set_yticks([])
+        sbn.despine(ax=axes[1], trim=True, left=True)
+        plt.tight_layout()
+        plt.show()
         # for each interommatidial angle component and total:
         # no_nans = (np.isnan(theta) == False) * (np.isnan(phi) == False)
         # for angs, title in zip([interommatidial_data.angle_h * 180 / np.pi,
