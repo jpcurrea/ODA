@@ -875,7 +875,7 @@ class Points:
         proj_radii = radii[inds]
         dists[self.radii < proj_radii] *= -1
         # todo: try using linear interpolation 
-        breakpoint()
+        # breakpoint()
         interp = interpolate.LinearNDInterpolator(
             surface[:, :2], surface[:, 2])
         surface_model = interp(self.pts[:, 0], self.pts[:, 1])
@@ -3084,8 +3084,11 @@ class CTStack(Stack):
                 # only go through each pair once
                 if all([pair not in pairs,
                         np.any(self.ommatidial_data.label.values == neighbor_ind)]):
-                    inds = np.where(self.ommatidial_data.label.values == neighbor_ind)[0][0]
-                    neighbor_cone = self.ommatidial_data.loc[inds]
+                    try:
+                        inds = np.where(self.ommatidial_data.label.values == neighbor_ind)[0][0]
+                        neighbor_cone = self.ommatidial_data.iloc[inds]
+                    except:
+                        breakpoint()
                     inds = np.where(cluster_lbls == neighbor_ind)[0]
                     theta1, phi1 = cone[['theta', 'phi']].values.T
                     x, y, z = cone[['x', 'y', 'z']]
@@ -3588,29 +3591,30 @@ class CTStack(Stack):
         # clusterer = cluster.KMeans(n_clusters=len(init_coords),
         #                            init=init_coords).fit(pos_orientations)
         # cluster_centers = clusterer.cluster_centers_
-        # plt.scatter(pair_orientations[:, 0], pair_orientations[:, 1], alpha=.005)
-        # plt.scatter(cluster_centers[:, 0], cluster_centers[:, 1], c=init_angs)
-        # plt.gca().set_aspect('equal')
-        # plt.show()
+        plt.scatter(pair_orientations[:, 0], pair_orientations[:, 1], alpha=.005)
+        plt.scatter(cluster_centers[:, 0], cluster_centers[:, 1], c=init_angs)
+        plt.gca().set_aspect('equal')
+        plt.show()
         # ii. find the cluster center with an angle closest to np.pi/2
-        cluster_angles = np.arctan2(cluster_centers[:, 1], cluster_centers[:, 0])
+        cluster_angles = np.arctan2(cluster_centers[:, 0], cluster_centers[:, 1])
         horizontal_angles = cluster_angles % (2 * np.pi)
-        horizontal_axis = np.argmin(abs(np.pi/2 - horizontal_angles))
+        horizontal_axis = np.argmin(abs(horizontal_angles))
         # horizontal_axis = np.argmin(abs(cluster_angles))
         # iii. rotate everything by the difference between the horizontal axis and np.pi/2
-        ang_diff = -(np.pi/2 - cluster_angles[horizontal_axis])
+        ang_diff = -cluster_angles[horizontal_axis]
         # ang_diff = cluster_angles[horizontal_axis]
         # ang_diff = 0 - cluster_angles[horizontal_axis]
         # test: check that the rotation is correct at every level. for each of the following,
         # check that either the main orientation is around np.pi/2 or that a major ommatidial
         # axis is horizontal when plotted:
         # pair_pts
-        # test_rot = rotate(pair_centers, ang_diff, axis=1).T
+        # test_rot = rotate(pair_pts[:, 0], ang_diff, axis=1).T
         # fig, axes = plt.subplots(ncols=2)
-        # for ax, vals in zip(axes, [pair_centers, test_rot]):
+        # for ax, vals in zip(axes, [pair_pts[:, 0], test_rot]):
         #     ax.scatter(vals[:, 0], vals[:, 2])
         #     ax.set_aspect('equal')
         # plt.show()
+        # breakpoint()
         pair_pts = rotate(pair_pts, ang_diff, axis=1).T
         pair_axes = rotate(pair_axes, ang_diff, axis=1).T
         pair_axes_smooth = rotate(pair_axes_smooth, ang_diff, axis=1).T
@@ -4536,6 +4540,18 @@ class CTStack(Stack):
             # super title
             plt.tight_layout(rect=[0, 0.03, 1, 0.95])
             plt.show()
+            # todo: calculate the projected and polar vertical and horizontal FOVs
+            FOV_h = np.diff(np.percentile(theta, [2.5, 97.5]))[0]
+            FOV_v = np.diff(np.percentile(phi, [2.5, 97.5])) [0]
+            th_proj, ph_proj, _ = polar_raw.T
+            no_nans = np.isnan(th_proj) == False
+            FOV_h_proj = np.diff(np.percentile(th_proj[no_nans], [2.5, 97.5]))[0]
+            FOV_v_proj = np.diff(np.percentile(ph_proj[no_nans], [2.5, 97.5]))[0]
+            # todo: calculate the ratio of vertical to horizontal radii of curvature
+            # eye length = 
+            vert_to_hori = (np.sin(FOV_h/2) / np.sin(FOV_v/2)) * (np.sin(FOV_v_proj/2) / np.sin(FOV_h_proj/2))
+            print(f"The vertical radius is {vert_to_hori:.3f} times the horizontal radius using FOV estimates.")
+            # breakpoint()
         else:
             # use spherical coordinates
             polar = rectangular_to_spherical(pos_vectors)
@@ -4666,58 +4682,115 @@ class CTStack(Stack):
         sbn.despine(ax=img_ax, left=True, trim=True)
         plt.tight_layout()
         plt.show()
+        # todo: get measurements of the horizontal and vertical IO angle components
+        # find the horizontal group using the smallest 
+        group_nums = np.arange(3)
+        horizontal_group = group_nums[np.argmin(abs(group_oris))]
+        diagonal_groups = np.delete(group_nums, horizontal_group)
+        horizontal_group = groups == horizontal_group
+        diagonal_group = np.in1d(groups, diagonal_groups)
+        # calculate the horizontal and vertical IO angles
+        angle_h = 180./ np.pi * interommatidial_data['angle_h'].values
+        angle_v = 180./ np.pi * interommatidial_data['angle_v'].values
+        # IO horizontal = hor. angle of hor. pairs + 1/2 of the hor. angle of diagonal pairs
+        io_horizontal = np.concatenate([.5 * angle_h[horizontal_group], angle_h[diagonal_group]])
+        # IO vertical   = 2/sqrt(3) * vertical angle of diagonal pairs
+        io_vertical = angle_v[diagonal_group]
+        # do the same but for interommatidial distances
+        # print the median 
+        for vals, lbl in zip([io_horizontal, io_vertical], ['Horizontal', 'Vertical']):
+            print(f"{lbl} IO components:")
+            low, med, high = np.percentile(vals, [25, 50, 75])
+            indices = np.arange(len(vals))
+            indices_random = np.random.choice(indices, (len(vals), 10000), replace=True)
+            meds_random = vals[indices_random]
+            meds_random = np.median(meds_random, axis=1)
+            low_ci, high_ci = np.percentile(meds_random, [.5, 99.5])
+            label = f"m={med: .2f}\nIQR=[{low: .2f}, {high: .2f}]\nCI=({low_ci: .2f}, {high_ci: .2f})"
+            print(label)
         # plot the interommatidial diameters by their orientation like the total IO angles
-        breakpoint()
         pts1 = interommatidial_data[['pt1_x', 'pt1_y', 'pt1_z']].values
         pts2 = interommatidial_data[['pt2_x', 'pt2_y', 'pt2_z']].values
         diams = np.linalg.norm(pts2 - pts1, axis=-1)
-        # BINS = [np.linspace(-90, 90), np.linspace(diams.min(), np.round(diams.max(), -1), 50)]
-        BINS = [np.linspace(-90, 90), np.linspace(0, 40, 50)]
-        # plot one 2D histogram
-        fig, axes = plt.subplots(ncols=2, figsize=(3.08, 4), gridspec_kw={'width_ratios':[4, 1]})
-        axes[0].hist2d(orientation[no_nans] * 180 / np.pi,
-                       diams[no_nans],
-                       color='k', bins=BINS, cmap=CMAP, edgecolor='none')
-        axes[0].set_xlabel('Orientation ($\\degree$)')
-        axes[0].set_xticks([-60, 0, 60])
-        axes[0].set_ylabel("Diameter ($\mu$m)")
-        # plot stats per orientation group
-        img_ax = axes[0]
-        for group_num, group_ori, color in zip(
-                group_set, group_oris, [red, green, blue]):
-            # grab subset of the data
-            # todo: get values and plot in the same loop
-            ori = 180 / np.pi * group_ori
-            # get values of this group
-            inds = groups == group_num
-            sub_vals = diams[inds]
-            # remove nans
-            no_nans = np.isnan(sub_vals) == False
-            sub_vals = sub_vals[no_nans]
-            low, median, high = np.percentile(sub_vals, [25, 50, 75])
-            # bootstrap sub_vals to get 99% CI of the median
-            indices = np.arange(sum(no_nans))
-            indices_random = np.random.choice(indices, (len(sub_vals), 10000), replace=True)
-            meds_random = sub_vals[indices_random]
+        # get radius of intersection using the total IO angles and their corresponding diameters
+        radii = diams / (angles * np.pi / 180)
+        # todo: remove outliers
+        for vals, lbl in zip([diams, radii], ['Distance', 'Radius']):
+            no_nans = np.isnan(vals) == False
+            no_nans = no_nans * (np.isinf(vals) == False)
+            vals = np.copy(vals)[no_nans]
+            maxval = np.percentile(vals, 95)
+            BINS = [np.linspace(-90, 90), np.linspace(0, maxval, 50)]
+            # BINS = [np.linspace(-90, 90), np.linspace(0, 40, 50)]
+            # plot one 2D histogram
+            fig, axes = plt.subplots(ncols=2, figsize=(3.08, 4), gridspec_kw={'width_ratios':[4, 1]})
+            axes[0].hist2d(orientation[no_nans] * 180 / np.pi, vals, color='k', 
+                           bins=BINS, cmap=CMAP, edgecolor='none')
+            axes[0].set_xlabel('Orientation ($\\degree$)')
+            axes[0].set_xticks([-60, 0, 60])
+            axes[0].set_ylabel(f"{lbl} ($\mu$m)")
+            # plot stats per orientation group
+            img_ax = axes[0]
+            for group_num, group_ori, color in zip(
+                    group_set, group_oris, [red, green, blue]):
+                # grab subset of the data
+                # todo: get values and plot in the same loop
+                ori = 180 / np.pi * group_ori
+                # get values of this group
+                inds = groups[no_nans] == group_num
+                sub_vals = vals[inds]
+                # remove nans
+                # no_nans = np.isnan(sub_vals) == False
+                # sub_vals = sub_vals[no_nans]
+                low, median, high = np.percentile(sub_vals, [25, 50, 75])
+                # bootstrap sub_vals to get 99% CI of the median
+                indices = np.arange(len(sub_vals))
+                indices_random = np.random.choice(indices, (len(sub_vals), 10000), replace=True)
+                meds_random = sub_vals[indices_random]
+                meds_random = np.median(meds_random, axis=1)
+                low_ci, high_ci = np.percentile(meds_random, [.5, 99.5])
+                # make a label for the plotted data per  group
+                label = f"m={median: .2f}\nIQR=[{low: .2f}, {high: .2f}]\nCI=({low_ci: .2f}, {high_ci: .2f})"
+                # plot median +/- IQR
+                img_ax.plot([ori, ori], [low, high], color=color, alpha=.5)
+                img_ax.scatter([ori, ori], [low_ci, high_ci], color=color, marker='_')
+                img_ax.plot(ori, median, marker='.', color=color, label=label)
+            img_ax.legend(fontsize='xx-small')
+            sbn.despine(ax=axes[0], trim=True)
+            # plot the flattened histogram of diameters
+            no_nans = np.isnan(vals) == False
+            axes[1].hist(vals[no_nans], bins=BINS[1], orientation='horizontal', color='k', alpha=1)
+            ymin, ymax = axes[0].get_ylim()
+            axes[1].set_ylim(ymin, ymax)
+            axes[1].set_yticks([])
+            sbn.despine(ax=axes[1], trim=True, left=True)
+            plt.tight_layout()
+            plt.show()
+        # IO horizontal = hor. angle of hor. pairs + 1/2 of the hor. angle of diagonal pairs
+        # diams_h = np.concatenate([diams[diagonal_group]/2., diams[horizontal_group]/2])
+        # IO vertical   = 2/sqrt(3) * vertical angle of diagonal pairs
+        # diams_v = np.sqrt(3) * diams[diagonal_group] / 2.
+        # todo: measure the intersection radii assuming an isosceles triangle
+        # based on that, each radius is the diameters / IO angles
+        # radius_h = diams_h / io_horizontal
+        # radius_v = diams_v / io_vertical
+        # do the same but for interommatidial distances
+        # print the median 
+        for vals, lbl in zip(
+            [diams, radii], 
+            ['Diameters', 'Radius']):
+            print(f"{lbl}:")
+            no_nans = np.isnan(vals) == False
+            vals = np.copy(vals[no_nans])
+            low, med, high = np.percentile(vals, [25, 50, 75])
+            indices = np.arange(len(vals))
+            indices_random = np.random.choice(indices, (len(vals), 10000), replace=True)
+            meds_random = vals[indices_random]
             meds_random = np.median(meds_random, axis=1)
             low_ci, high_ci = np.percentile(meds_random, [.5, 99.5])
-            # make a label for the plotted data per  group
-            label = f"m={median: .2f}\nIQR=[{low: .2f}, {high: .2f}]\nCI=({low_ci: .2f}, {high_ci: .2f})"
-            # plot median +/- IQR
-            img_ax.plot([ori, ori], [low, high], color=color, alpha=.5)
-            img_ax.scatter([ori, ori], [low_ci, high_ci], color=color, marker='_')
-            img_ax.plot(ori, median, marker='.', color=color, label=label)
-        img_ax.legend(fontsize='xx-small')
-        sbn.despine(ax=axes[0], trim=True)
-        # plot the flattened histogram of diameters
-        no_nans = np.isnan(diams) == False
-        axes[1].hist(diams[no_nans], bins=BINS[1], orientation='horizontal', color='k', alpha=1)
-        ymin, ymax = axes[0].get_ylim()
-        axes[1].set_ylim(ymin, ymax)
-        axes[1].set_yticks([])
-        sbn.despine(ax=axes[1], trim=True, left=True)
-        plt.tight_layout()
-        plt.show()
+            label = f"m={med: .2f}\nIQR=[{low: .2f}, {high: .2f}]\nCI=({low_ci: .2f}, {high_ci: .2f})"
+            print(label)
+        breakpoint()
         # for each interommatidial angle component and total:
         # no_nans = (np.isnan(theta) == False) * (np.isnan(phi) == False)
         # for angs, title in zip([interommatidial_data.angle_h * 180 / np.pi,
@@ -5196,29 +5269,82 @@ class CTStack(Stack):
             # surface area is the sum of the areas of the triangles making up 
             surface_area = sum(areas)
             stats_summary.loc[len(stats_summary)]= ['surface area (mm^2)', surface_area, np.nan, 1, np.nan, np.nan, np.nan, np.nan, np.nan]
-            # add surface area data to the stats dataframe
-            chull_polar = spatial.ConvexHull(polar[:, :2])
-            contour_polar = polar[chull_polar.vertices]
-            # fit an ellipse to the contour and store the minor and major diameters as minimum
-            # and maximum values of the variable
-            ellipse = LSqEllipse()
-            ellipse.fit(contour_polar.T[:2])
-            center, width, height, phi = ellipse.parameters()
-            fov_spherical_minor, fov_spherical_major = min(width, height), max(width, height)
-            # b. FOV - both spherical and projected (and specifying the minor and major diameters)
-            # spherical: use contour of the polar coordinates (theta and phi)
-            fov_spherical = sum(solid_angles)
-            stats_summary.loc[len(stats_summary)] = [
-                'FOV spherical', fov_spherical, np.nan, 1, fov_spherical_minor,
-                np.nan, np.nan, np.nan, fov_spherical_major]
             # projected: use projected polar coordinates and same tesselation approach
             x, y, z = self.ommatidial_data[['x_', 'y_', 'z_']].values.T
             pos_vectors = np.array([x, y, z]).T
             dx, dy, dz = self.ommatidial_data[['dx', 'dy', 'dz']].values.T
             dir_vectors = np.array([dx, dy, dz]).T
             dir_vectors /= np.linalg.norm(dir_vectors, axis=1)[:, np.newaxis]
-            proj_coords = project_coords(pos_vectors, dir_vectors, radius=projected_radius)
+            proj_coords = project_coords(pos_vectors, dir_vectors, radius=projected_radius, convex=True)
             proj_polar = rectangular_to_spherical(proj_coords)
+            # todo: use the tessalated coordinates to measure the major and minor eye diameters
+            # use the spherical polar coordinates to measure the spherical FOVs
+            # use convex hull of 95% kde
+            for coords, lbl in zip(
+                [polar, proj_polar],
+                ['spherical', 'projected']):
+                kde = stats.gaussian_kde(coords[:, :2].T)
+                # get grid of points around 
+                th, ph = coords.T[:2]
+                width, height = th.max() - th.min(), ph.max() - ph.min()
+                th_grid = np.linspace(th.min() - .05*width,  th.max() + .05*width, 200)
+                ph_grid = np.linspace(ph.min() - .05*height, ph.max() + .05*height, 200)
+                th_grid, ph_grid = np.meshgrid(th_grid, ph_grid)
+                grid = np.array([th_grid.flatten(), ph_grid.flatten()])
+                density = kde(grid).reshape(200, 200)
+                density /= density.max()
+                # get convex hull of the 95% density region
+                xs, ys = np.where(density > .5)
+                pts = np.array([xs, ys]).T
+                chull_coords = spatial.ConvexHull(pts)
+                contour_coords = pts[chull_coords.vertices].T
+                contour_th = th_grid[contour_coords[0], contour_coords[1]]
+                contour_ph = ph_grid[contour_coords[0], contour_coords[1]]
+                contour_coords = np.array([contour_th, contour_ph]).T
+                # measure the major diameter using the longest distance among polar coordinates
+                diffs = contour_coords[np.newaxis] - contour_coords[:, np.newaxis]
+                dists = np.linalg.norm(diffs, axis=-1)
+                max_dist = dists.max()
+                ind = np.where(dists == max_dist)[0]
+                major_vector = contour_coords[ind]
+                major_vector_diff = major_vector[1] - major_vector[0]
+                major_vector_unit = major_vector_diff / np.linalg.norm(major_vector_diff)
+                major_vector_reciprocal = np.array([-major_vector_unit[1], major_vector_unit[0]])
+                major_vector_unit = np.array([major_vector_unit, major_vector_reciprocal])
+                # todo: get major and minor FOV's by rotating and projecting all of the 
+                # coords coordinates onto those vectors
+                coords_rotated = np.dot(
+                    coords[:, :2] - coords[:, :2].mean(0), 
+                    major_vector_unit.T) + coords[:, :2].mean(0)
+                major_rotated = np.dot(
+                    major_vector - major_vector.mean(0),
+                    major_vector_unit.T) + major_vector.mean(0)
+                # test: plot the original and rotated coordinates
+                fig, axes = plt.subplots(ncols=2)
+                # original coordinates:
+                axes[0].scatter(coords[:, 0], coords[:, 1])
+                axes[0].plot(major_vector[:, 0], major_vector[:, 1], '-ok')
+                # rotated:
+                axes[1].scatter(coords_rotated[:, 0], coords_rotated[:, 1])
+                axes[1].plot(major_rotated[:, 0], major_rotated[:, 1], '-ok')
+                [ax.set_aspect('equal') for ax in axes]
+                plt.tight_layout()
+                plt.show()
+                # use the rotated coordinates to measure the field of view based on 
+                # the distributions of each dimension
+                xs, ys = coords_rotated.T
+                fov_major = np.diff(np.percentile(xs, [5, 95]))
+                fov_minor = np.diff(np.percentile(ys, [5, 95]))
+                # calculate the solid angle of each pixel in the density grid
+                pxl_solid_angle = abs((th_grid[0, 1] - th_grid[0, 0])*(ph_grid[1, 0] - ph_grid[0, 0]))
+                fov = sum(density > .5).sum() * pxl_solid_angle
+                # the FOV is the sum of all the solid angles in the density grid
+                stats_summary.loc[len(stats_summary)] = [
+                    f"FOV_{lbl}", fov, np.nan, 1, fov_minor,
+                    np.nan, np.nan, np.nan, fov_major]
+                breakpoint()    
+            # todo: use the projected polar coordinates to measure the projected FOVs
+            # instead of using the tesselation, use the 95% kde
             proj_polar[:, 2] = 1
             include = np.any(np.isnan(proj_polar), axis=1) == False
             proj_tess = spatial.Delaunay(proj_polar[include][:, :2])
@@ -5250,16 +5376,16 @@ class CTStack(Stack):
             # a. number of ommatidia - len(self.ommatidial_data)
             ommatidia_count = len(self.ommatidial_data)
             stats_summary.loc[len(stats_summary.index)] = [
-                'ommatidia count', ommatidia_count, np.nan, 1, np.nan, np.nan,
+                'ommatidia_count', ommatidia_count, np.nan, 1, np.nan, np.nan,
                 np.nan, np.nan, np.nan]
             # b. ommatidial density - ommatidia count / FOV
             polar_density = ommatidia_count / fov_projected
             density = ommatidia_count / surface_area
             stats_summary.loc[len(stats_summary)] = [
-                "polar density (facets/sr)", polar_density, np.nan, 1, np.nan, np.nan, np.nan,
+                "polar_density_(facets/sr)", polar_density, np.nan, 1, np.nan, np.nan, np.nan,
                 np.nan, np.nan]
             stats_summary.loc[len(stats_summary)] = [
-                'density (facets/mm^2)', density, np.nan, 1, np.nan, np.nan, np.nan,
+                'density_(facets/mm^2)', density, np.nan, 1, np.nan, np.nan, np.nan,
                 np.nan, np.nan]
             for var in ['radius', 'lens_diameter', 'lens_diameter_adj','lens_area',
                         'skewness', 'spherical_IOA', 'cross_section_area',
@@ -5272,7 +5398,7 @@ class CTStack(Stack):
                     var, vals.mean(), vals.std(), len(vals),
                     key_vals[0], key_vals[1], key_vals[2], key_vals[3], key_vals[4]]
         self.stats = stats_summary
-        return stats
+        return self.stats
         # # interommatidial data
         # if 'interommatidial_data' in dir(self):
         #     # get the 3 orientation groups
