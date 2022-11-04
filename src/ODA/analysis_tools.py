@@ -31,8 +31,8 @@ rgb_2_gray(rgb) : np.ndarray
 """
 from functools import partial
 import h5py
-from .interfaces import *
-# from interfaces import *
+# from .interfaces import *
+from interfaces import *
 import math
 import matplotlib
 from matplotlib import colors, mlab
@@ -2170,9 +2170,10 @@ class CTStack(Stack):
             new_database = h5py.File(self.database_fn, 'w')
             new_database.close()
             self.database = h5py.File(self.database_fn, mode)
-        first_layer = Layer(self.fns[0])
-        first_layer.load()
-        self.dtype = first_layer.image.dtype
+        if len(self.fns) > 0:
+            first_layer = Layer(self.fns[0])
+            first_layer.load()
+            self.dtype = first_layer.image.dtype
         for key in self.database.keys():
             setattr(self, key, self.database[key])
         files_to_load = [
@@ -2180,30 +2181,35 @@ class CTStack(Stack):
             os.path.join(self.dirname, 'interommatidial_data.pkl')]
         for var, fn in zip(['ommatidial_data', 'interommatidial_data'],
                            files_to_load):
-            try:
-                if var in dir(self):
-                    delattr(self, var)
-                if os.path.exists(fn):
+            csv_fn = fn.replace(".pkl", ".csv")
+            if var in dir(self):
+                delattr(self, var)
+            if os.path.exists(fn):
+                try:
                     setattr(self, var, pd.read_pickle(fn))
-            except:
-                print(f"failed to load {var}")
+                except:
+                    if os.path.exists(csv_fn):
+                        setattr(self, var, pd.read_csv(csv_fn))
+                    else:
+                        print(f"failed to load {var}")
 
     def close_database(self):
         """Delete the H5PY database."""
-        try:
-            self.database.close()
-        except:
-            # make a temporary copy of this database
-            temp_fn = "temp_database.h5"
-            with h5py.File(temp_fn, 'w') as database_copy:
-                for key in self.database.keys():
-                    dataset = self.database[key][:]
-                    database_copy.create_dataset(
-                        key, data=dataset, dtype=dataset.dtype)
-            # now delete the old database
-            del self.database
-            os.remove(self.database_fn)
-            os.rename(temp_fn, self.database_fn)
+        if 'database' in dir(self):
+            try:
+                self.database.close()
+            except:
+                # make a temporary copy of this database
+                temp_fn = "temp_database.h5"
+                with h5py.File(temp_fn, 'w') as database_copy:
+                    for key in self.database.keys():
+                        dataset = self.database[key][:]
+                        database_copy.create_dataset(
+                            key, data=dataset, dtype=dataset.dtype)
+                # now delete the old database
+                del self.database
+                os.remove(self.database_fn)
+                os.rename(temp_fn, self.database_fn)
 
     def save_database(self):
         """Save the H5PY database by closing and reopening it."""
@@ -3591,10 +3597,11 @@ class CTStack(Stack):
         # clusterer = cluster.KMeans(n_clusters=len(init_coords),
         #                            init=init_coords).fit(pos_orientations)
         # cluster_centers = clusterer.cluster_centers_
-        plt.scatter(pair_orientations[:, 0], pair_orientations[:, 1], alpha=.005)
-        plt.scatter(cluster_centers[:, 0], cluster_centers[:, 1], c=init_angs)
-        plt.gca().set_aspect('equal')
-        plt.show()
+        if test:
+            plt.scatter(pair_orientations[:, 0], pair_orientations[:, 1], alpha=.005)
+            plt.scatter(cluster_centers[:, 0], cluster_centers[:, 1], c=init_angs)
+            plt.gca().set_aspect('equal')
+            plt.show()
         # ii. find the cluster center with an angle closest to np.pi/2
         cluster_angles = np.arctan2(cluster_centers[:, 0], cluster_centers[:, 1])
         horizontal_angles = cluster_angles % (2 * np.pi)
@@ -4625,7 +4632,7 @@ class CTStack(Stack):
                 meds_random = np.median(meds_random, axis=1)
                 low_ci, high_ci = np.percentile(meds_random, [.5, 99.5])
                 # make a label for the plotted data per  group
-                label = f"m={median: .2f}\nIQR=[{low: .2f}, {high: .2f}]\nCI=({low_ci: .2f}, {high_ci: .2f})"
+                label = f"N={len(sub_vals)}\nm={median: .2f}\nIQR=[{low: .2f}, {high: .2f}]\nCI=({low_ci: .2f}, {high_ci: .2f})"
                 print()
                 print(f"group # {group_num}, at {np.round(ori, 2)}$\degree$")
                 print(label)
@@ -4664,7 +4671,7 @@ class CTStack(Stack):
             meds_random = np.median(meds_random, axis=1)
             low_ci, high_ci = np.percentile(meds_random, [.5, 99.5])
             # make a label for the plotted data per  group
-            label = f"m={median: .2f}\nIQR=[{low: .2f}, {high: .2f}]\nCI=({low_ci: .2f}, {high_ci: .2f})"
+            label = f"N={len(sub_vals)}\nm={median: .2f}\nIQR=[{low: .2f}, {high: .2f}]\nCI=({low_ci: .2f}, {high_ci: .2f})"
             # plot median +/- IQR
             img_ax.plot([ori, ori], [low, high], color=color, alpha=.5)
             img_ax.scatter([ori, ori], [low_ci, high_ci], color=color, marker='_')
@@ -4706,7 +4713,7 @@ class CTStack(Stack):
             meds_random = vals[indices_random]
             meds_random = np.median(meds_random, axis=1)
             low_ci, high_ci = np.percentile(meds_random, [.5, 99.5])
-            label = f"m={med: .2f}\nIQR=[{low: .2f}, {high: .2f}]\nCI=({low_ci: .2f}, {high_ci: .2f})"
+            label = f"N={len(vals)}\nm={med: .2f}\nIQR=[{low: .2f}, {high: .2f}]\nCI=({low_ci: .2f}, {high_ci: .2f})"
             print(label)
         # plot the interommatidial diameters by their orientation like the total IO angles
         pts1 = interommatidial_data[['pt1_x', 'pt1_y', 'pt1_z']].values
@@ -5320,16 +5327,16 @@ class CTStack(Stack):
                     major_vector - major_vector.mean(0),
                     major_vector_unit.T) + major_vector.mean(0)
                 # test: plot the original and rotated coordinates
-                fig, axes = plt.subplots(ncols=2)
+                # fig, axes = plt.subplots(ncols=2)
                 # original coordinates:
-                axes[0].scatter(coords[:, 0], coords[:, 1])
-                axes[0].plot(major_vector[:, 0], major_vector[:, 1], '-ok')
-                # rotated:
-                axes[1].scatter(coords_rotated[:, 0], coords_rotated[:, 1])
-                axes[1].plot(major_rotated[:, 0], major_rotated[:, 1], '-ok')
-                [ax.set_aspect('equal') for ax in axes]
-                plt.tight_layout()
-                plt.show()
+                # axes[0].scatter(coords[:, 0], coords[:, 1])
+                # axes[0].plot(major_vector[:, 0], major_vector[:, 1], '-ok')
+                # # rotated:
+                # axes[1].scatter(coords_rotated[:, 0], coords_rotated[:, 1])
+                # axes[1].plot(major_rotated[:, 0], major_rotated[:, 1], '-ok')
+                # [ax.set_aspect('equal') for ax in axes]
+                # plt.tight_layout()
+                # plt.show()
                 # use the rotated coordinates to measure the field of view based on 
                 # the distributions of each dimension
                 xs, ys = coords_rotated.T
@@ -5340,9 +5347,8 @@ class CTStack(Stack):
                 fov = sum(density > .5).sum() * pxl_solid_angle
                 # the FOV is the sum of all the solid angles in the density grid
                 stats_summary.loc[len(stats_summary)] = [
-                    f"FOV_{lbl}", fov, np.nan, 1, fov_minor,
-                    np.nan, np.nan, np.nan, fov_major]
-                breakpoint()    
+                    f"FOV_{lbl}", fov, np.nan, 1, fov_minor[0],
+                    np.nan, np.nan, np.nan, fov_major[0]]
             # todo: use the projected polar coordinates to measure the projected FOVs
             # instead of using the tesselation, use the 95% kde
             proj_polar[:, 2] = 1

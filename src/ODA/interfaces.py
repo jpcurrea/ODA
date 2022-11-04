@@ -101,19 +101,23 @@ class VarSummary():
         if xmin is None:
             self.xmin = self.x.min()
         else:
-            self.xmin = xmin - self.x_offset
+            # self.xmin = xmin - self.x_offset
+            self.xmin = xmin
         if xmax is None:
             self.xmax = self.x.max()
         else:
-            self.xmax = xmax - self.x_offset
+            # self.xmax = xmax - self.x_offset
+            self.xmax = xmax
         if ymin is None:
             self.ymin = self.y.min()
         else:
-            self.ymin = ymin - self.y_offset
+            # self.ymin = ymin - self.y_offset
+            self.ymin = ymin
         if ymax is None:
             self.ymax = self.y.max()
         else:
-            self.ymax = ymax - self.y_offset
+            # self.ymax = ymax - self.y_offset
+            self.ymax = ymax
         if vmin is None and self.vmin is None:
             self.vmin = self.colorvals.min()
         else:
@@ -139,8 +143,8 @@ class VarSummary():
         xs = xs[:-1] + (self.raster_pixel_length / 2.)
         ys = ys[:-1] + (self.raster_pixel_length / 2.)
         xvals, yvals = np.meshgrid(xs, ys)
-        self.xpad = .1 * (abs(self.xmax - self.xmin))
-        self.ypad = .1 * (abs(self.ymax - self.ymin))
+        self.xpad = .05 * (abs(self.xmax - self.xmin))
+        self.ypad = .05 * (abs(self.ymax - self.ymin))
         self.xmin, self.xmax = self.xmin - self.xpad, self.xmax + self.xpad
         self.ymin, self.ymax = self.ymin - self.ypad, self.ymax + self.ypad
         # split figure into axes using a grid
@@ -274,7 +278,7 @@ class VarSummary():
             # plot
             no_nans = np.isnan(self.colorvals) == False
             self.vertical_ax.hist2d(self.colorvals[no_nans],
-                                    self.y, bins=[15, ys.shape[0]],
+                                    self.y[no_nans], bins=[15, ys.shape[0]],
                                     cmap='Greys')
             self.vertical_ax.plot(mids, bins_vertical_labels, color=red)
             for y, low, high, low_ci, high_ci in zip(bins_vertical_labels, lows, highs,
@@ -327,7 +331,7 @@ class VarSummary():
             self.horizontal_ax = self.fig.add_subplot(self.gridspec[1, 1],
                                                       sharex=self.heatmap_ax)
             no_nans = np.isnan(self.colorvals) == False
-            self.horizontal_ax.hist2d(self.x, self.colorvals[no_nans],
+            self.horizontal_ax.hist2d(self.x[no_nans], self.colorvals[no_nans],
                                       bins=[xs.shape[0], 15],
                                       cmap='Greys')
             for x, low, high, low_ci, high_ci, mid in zip(bins_horizontal_labels, lows, highs,
@@ -490,9 +494,10 @@ class VarSummary():
         if margins:
             sbn.despine(ax=self.heatmap_ax, bottom=True, left=True)
         else:
-            sbn.despine(ax=self.heatmap_ax, bottom=False, left=False)
+            sbn.despine(ax=self.heatmap_ax, bottom=False, left=False, trim=True)
         self.heatmap_ax.label_outer()
-        self.heatmap_ax.tick_params(axis=u'both', which=u'both',length=0)
+        if margins:
+            self.heatmap_ax.tick_params(axis=u'both', which=u'both',length=0)
 
 
 class VarSummary_lines(VarSummary):
