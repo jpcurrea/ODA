@@ -31,8 +31,10 @@ rgb_2_gray(rgb) : np.ndarray
 """
 from functools import partial
 import h5py
-# from .interfaces import *
-from interfaces import *
+# when running from pip install:
+from .interfaces import *
+# when runnning locally:
+# from interfaces import *
 import math
 import matplotlib
 from matplotlib import colors, mlab
