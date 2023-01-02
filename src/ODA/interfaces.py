@@ -118,24 +118,21 @@ class VarSummary():
         else:
             # self.ymax = ymax - self.y_offset
             self.ymax = ymax
-        if vmin is None and self.vmin is None:
-            self.vmin = self.colorvals.min()
-        else:
+        if vmin is not None:
             self.vmin = vmin
-        if vmax is None and self.vmax is None:
-            self.vmax = self.colorvals.max()
-        else:
+        elif self.vmin is None:
+            self.vmin = self.colorvals.min()
+        if vmax is not None:
             self.vmax = vmax
+        elif self.vmax is None:
+            self.vmax = self.colorvals.max()
         # x_range = self.x.max() - self.x.min()
         # y_range = self.y.max() - self.y.min()
         x_range = self.xmax - self.xmin
         y_range = self.ymax - self.ymin
         # figure out side lengths needed for input image size
         ratio = y_range / x_range
-        try:
-            x_len = int(np.round(np.sqrt(self.image_size/ratio)))
-        except:
-            breakpoint()
+        x_len = int(np.round(np.sqrt(self.image_size/ratio)))
         # get x and y ranges corresponding to image size
         xs = np.linspace(self.xmin, self.xmax, x_len)
         self.raster_pixel_length = xs[1] - xs[0]
@@ -352,7 +349,7 @@ class VarSummary():
         plt.suptitle(self.suptitle)
         # plt.tight_layout()
 
-    def plot_heatmap(self, xs, ys, grid, inset=False, inset_width=10, margins=True):
+    def plot_heatmap(self, xs, ys, grid, inset=False, inset_width=20, margins=True):
         # self.heatmap = self.heatmap_ax.scatter(
         #     self.x, self.y, c=self.colorvals, cmap=self.cmap,
         #     vmin=self.cmin, vmax=self.cmax)
@@ -419,12 +416,14 @@ class VarSummary():
                         colorvals -= self.vmin
                         colorvals /= (self.vmax - self.vmin)
                         colors = cmap(colorvals)
+                        breakpoint()
                         self.heatmap_axins.scatter(xs[include], ys[include], c=colors[include],
                                                    marker=self.marker)
             else:
                 # plot a bunch of circles with colors from colorvals and areas from marker_sizes
                 cmap = plt.get_cmap(self.cmap)
                 colorvals = np.copy(self.colorvals)
+                
                 colorvals[colorvals < self.vmin] = 0
                 colorvals -= self.vmin
                 colorvals /= (self.vmax - self.vmin)
