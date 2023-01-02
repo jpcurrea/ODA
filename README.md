@@ -15,7 +15,6 @@ This library automatically counts and measures the ommatidia of compound eyes fr
 
 My graduate mentor once challenged me to count the ommatidia of vinegar flies (a.k.a. fruit flies, _Drosophila melanogaster_). I quickly learned that they have two compound eyes, each composed of about 1000 light collecting facets called ommatidia. I learned this as I counted the ommatidia of over 100 flies, culminating in over _90,000_ ommatidia (and [a publication](https://www.sciencedirect.com/science/article/pii/S0042698918300919))!
 
-<!-- |[![Image](figs/count_demo.png)](figs/count_demo.png)| -->
 |<img src='figs/count_demo.png' width="600" />|
 |:--:|
 |*The geometric arrangement sped up the counting .. a little.*|
@@ -28,7 +27,6 @@ Many have braved this challenge of counting ommatidia because, among other reaso
 
 Plus, as opposed to our camera-type eyes, many of the structures limiting the visual performance of compound eyes can be measured in direct external images. The number and size of ommatidia set physical limitations on what a compound eye can see. Each one collects a pixel of the image captured by the retina and sits immediately adjacent to the next ommatidium, separated by screening pigment (see below). The angle separating neighboring ommatidia, called the interommatidial angle, determines the smallest resolvable detail just like the inter-receptor angle of our own camera-type eyes. The size of the ommatidial aperture limits the amount of light available for absorption so that large ommatidia offer greater sensitivity to low light levels. For a compound eye to acheive the same resolution as our eyes, for instance, it would need to be at least 1 meter in diameter and composed of millions of ommatidia! Counting and measuring ommatidia tells us a great deal about the spatial resolution and light sensitivity of many arthropods. 
 
-<!-- |![Image](figs/resolution.png)| -->
 |<img src="figs/resolution.png" width="600"/>|
 |:--:|
 |*Camera-type eyes can have higher acuity because one lens serves the whole retina.*|
@@ -297,7 +295,7 @@ class EyeStack(Stack):
         mask_fn : str, default="mask.jpg"
             The filename of the boolean masking image.
         mask_arr : array-like, default=None
-            2D boolean masking array.         
+            2D boolean masking array.
         
         Attributes
         ----------
