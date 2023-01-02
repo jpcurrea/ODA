@@ -1,22 +1,22 @@
 ---
 ---
 
- @import "minima";
+@import "{{ site.theme }}";
 
- table {
+table {
    border-collapse: collapse;
- }
+}
 
- table, td, th {
+table, td, th {
    border: 1px solid black;
- }
+}
 
- header {
+header {
      width:150px;
      float:left;
      position:fixed;
      -webkit-font-smoothing:subpixel-antialiased;  100
- }
+}
 
 section {
   width:600px;
