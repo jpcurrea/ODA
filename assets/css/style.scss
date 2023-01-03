@@ -1,6 +1,9 @@
 ---
 ---
 
+@import "{{ site.theme }}";
+
+
 table {
    border-collapse: collapse;
 }
@@ -31,5 +34,4 @@ code {
 }
 
 
-@import "{{ site.theme }}";
 
