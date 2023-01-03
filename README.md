@@ -1,11 +1,24 @@
+# ODA
+A Python library for automating the counting and measuring of ommatidia in images. Our [preprint](https://doi.org/10.1101/2020.12.11.422154) is in review at Communications Biology.
 ## Contents
-- [On Counting Ommatidia](#intro)
+<ul>
+	  <li><a href="#intro">On Counting Ommatidia</a></li>
+	  <li><a href="#ODA">Ommatidia Detecting Algorithm (ODA)</a></li>
+	  <li><a href="#install">Installation</a></li>
+	  <li><a href="#documentation">Documentation</a></li>
+	  <ol>
+	    <li><a href="#documentation_1">Eye: Individual Image of an Eye</a></li>
+	    <li><a href="#documentation_2">EyeStack: Focus Stack of an Eye</a></li>
+	    <li><a href="#documentation_3">CTStack: MicroCT of an Eye</a></li>
+	  </ul>
+	</ul>
+<!-- - [On Counting Ommatidia](#intro)
 - [Ommatidia Detecting Algorithm (ODA)](#ODA)
 - [Installation](#install)
 - [Documentation](#documentation)
     a. [Eye: Individual Image of an Eye](#documentation_1)
     b. [EyeStack: Focus Stack of an Eye](#documentation_2)
-    c. [CTStack: MicroCT of an Eye](#documentation_3)
+    c. [CTStack: MicroCT of an Eye](#documentation_3) -->
 <div id="intro"/>
 ## On Counting Ommatidia 
 
