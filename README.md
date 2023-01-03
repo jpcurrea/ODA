@@ -102,7 +102,7 @@ class Eye(Layer):
 
 |Example Results|
 |:--:|
-|<img src="figs/ant_replicas_comparison.png" width="1000"/>|
+|<a href="figs/ant_replicas_comparison.png"><img src="figs/ant_replicas_comparison.png" width="1000"/></a>|
 |*This comparison of the ODA on 5 different ant eye replicas was included in the [methods paper](https://doi.org/10.1101/2020.12.11.422154). The automated counts were 99% and the diameters were 93% of those measured by hand*|
 
 The [Eye object](https://github.com/jpcurrea/ODA/blob/55684a97fb32a95f24d17eaf04c49253c98fee27/src/ODA/analysis_tools.py#L1268) takes in an eye image and an optional masking image to indicate which pixels correspond to the eye. You can also input the length of each pixel so that the program can provide actual measurements of length. Once instantiated, an Eye can run a number of methods on the image including cropping the eye, getting it's dimensions, finding ommatidia, and taking measurements of the eye. To run all of this in the appropriate order, run the Eye.ommatidia_detecting_algorithm method. Here's an example script for loading an individual Eye image. The following assumes that you cloned the tests folder from our github repository.
@@ -502,7 +502,7 @@ dataframe.to_csv("eye_stack_data.csv", index=False)
 ```
 #### Example
 
-|<img src="figs/eye_stack_s1.png" width="600"/>|<img src="figs/eye_stack_s2.png" width="600"/>|
+|<a href="figs/eye_stack_s1.png"><img src="figs/eye_stack_s1.png" width="600"/></a>|<a href="figs/eye_stack_s2.png"><img src="figs/eye_stack_s2.png" width="600"/></a|
 |:--:|:--:|
 |*[Comparison of 2 fruit fly species](https://doi.org/10.1016/j.isci.2021.103637) using the reciprocal image.*|*The ODA 3D approximates the ommatidial diameters using 3D distances.*|
 
@@ -581,7 +581,7 @@ class CTStack(Stack):
 
 The ODA-3D works by converting the 3D dataset of an eye into 2D images by projecting the 3D eye surface onto 2D planes perpendicular to the surface and then applying the 2D ODA to segment the dataset into blobls correspoding to each ommatidium. There are special considerations for eyes with ommatidia askew to the eye surface. For details on the pipeline, see the [preprint](https://doi.org/10.1101/2020.12.11.422154).
 
-|<img src="figs/oda3d_block_diagram.png" width="365"/>|<img src="figs/oda3d_demo.png" width="800"/>|
+|<img src="figs/oda3d_block_diagram.png" width="365"/>|<a href="figs/oda3d_demo.png"><img src="figs/oda3d_demo.png" width="800"/></a>|
 |:--:|:--:|
 
 #### Time Saved
@@ -589,7 +589,7 @@ The ODA-3D works by converting the 3D dataset of an eye into 2D images by projec
 We profiled the performance of the ODA-3D on 4 different datasets in comparison to estimates of how long they would take to measure and count by hand. The results suggested that the ODA is very accurate and can perform ~1,000 times faster than manual measurements.
 | Species Comparison | Benchmark |
 |:--:|:--:|
-|<img src="figs/ctstack_demo.png" width="1000"/>|<img src="figs/oda3d_benchmarks.png" width="180"/>|
+|<a href="figs/ctstack_demo.png"><img src="figs/ctstack_demo.png" width="1000"/></a>|<img src="figs/oda3d_benchmarks.png" width="180"/>|
 
 #### Processing a CTStack
 
