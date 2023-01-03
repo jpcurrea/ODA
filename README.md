@@ -1,5 +1,3 @@
-This Python library automatically counts and measures the ommatidia of compound eyes from images. The program is presented in [preprint](https://doi.org/10.1101/2020.12.11.422154), which has been accepted for publication in Communications: Biology and should be published soon.
-
 ## Contents
 - [On Counting Ommatidia](#intro)
 - [Ommatidia Detecting Algorithm (ODA)](#ODA)
