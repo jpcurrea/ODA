@@ -5,15 +5,15 @@ This Python library automatically counts and measures the ommatidia of compound 
 2. [Ommatidia Detecting Algorithm (ODA)](#ODA)
 3. [Installation](#install)
 4. [Documentation](#documentation)
-   a. [Eye: Individual Image of an Eye](#documentation_1)
-   b. [EyeStack: Focus Stack of an Eye](#documentation_2)
-   c. [CTStack: MicroCT of an Eye](#documentation_3)
+    a. [Eye: Individual Image of an Eye](#documentation_1)
+    b. [EyeStack: Focus Stack of an Eye](#documentation_2)
+    c. [CTStack: MicroCT of an Eye](#documentation_3)
 <div id="intro"/>
 ## On Counting Ommatidia 
 
 My graduate mentor once challenged me to count the ommatidia of vinegar flies (a.k.a. fruit flies, _Drosophila melanogaster_). I quickly learned that they have two compound eyes, each composed of about 1000 light collecting facets called ommatidia. I learned this as I counted the ommatidia of over 100 flies, culminating in over _90,000_ ommatidia (and [a publication](https://www.sciencedirect.com/science/article/pii/S0042698918300919))!
 
-|<img src='figs/count_demo.png' width="600" />|
+|<a href='figs/count_demo.png'><img src='figs/count_demo.png' width="600" /></a>|
 |:--:|
 |*The geometric arrangement sped up the counting .. a little.*|
 
