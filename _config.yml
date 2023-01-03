@@ -3,5 +3,3 @@ plugins:
 - jekyll-remote-theme # add this line to the plugins list if you already have one
 title: Ommatidia Detecting Algorithm (ODA)
 show_downloads: False
-description: A Python library to measure the ommatidia of compound eyes from images
-logo: figs/eye_diagram.pngx
