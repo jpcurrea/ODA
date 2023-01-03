@@ -1,15 +1,13 @@
-# Ommatidia Detecting Algorithm
-
-This library automatically counts and measures the ommatidia of compound eyes from images. The program is presented in [preprint](https://doi.org/10.1101/2020.12.11.422154), which has been accepted for publication in Communications: Biology and should be published soon.
+This Python library automatically counts and measures the ommatidia of compound eyes from images. The program is presented in [preprint](https://doi.org/10.1101/2020.12.11.422154), which has been accepted for publication in Communications: Biology and should be published soon.
 
 ## Contents
 1. [On Counting Ommatidia](#intro)
 2. [Ommatidia Detecting Algorithm (ODA)](#ODA)
 3. [Installation](#install)
 4. [Documentation](#documentation)
-    a. [Eye: Individual Image of an Eye](#documentation_1)
-    b. [EyeStack: Focus Stack of an Eye](#documentation_2)
-    c. [CTStack: MicroCT of an Eye](#documentation_3)
+   a. [Eye: Individual Image of an Eye](#documentation_1)
+   b. [EyeStack: Focus Stack of an Eye](#documentation_2)
+   c. [CTStack: MicroCT of an Eye](#documentation_3)
 <div id="intro"/>
 ## On Counting Ommatidia 
 
@@ -38,7 +36,6 @@ Wouldn't it be nice if a program could count these ommatidia automatically? Peop
 
 After many hours of strained eyes and greuling ommatidia counting, I developed a pretty simple algorithm to get my computer to count ommatidia for me. Fortunately, it has generated counts and measurements that align well with manual measurements and measurements in the literature. That is detailed here in our preprint: https://doi.org/10.1101/2020.12.11.422154.
 
-<!-- |![Image](figs/oda_demo.png)| -->
 |<img src="figs/eye_gratings.png" width=600)/>|
 |:--:|
 |*General Pipeline of the ODA*|
@@ -316,6 +313,7 @@ class EyeStack(Stack):
         [...]
 ```
 The 3D reconstruction works by comparing the level of focus of each pixel to that of the corresponding pixel in the other layers. Below is a figure from [another one of my projects](https://doi.org/10.1016/j.isci.2021.103637) that applied this method to compare the visual properties of vinegar flies (*D. melanogaster*) to two subspecies of a fly native to deserts in southwest North America (*D. mojavensis mojavensis* and *D. mojavensis baja*): 
+
 |<img src="figs/stack_reconstruction.png" width="600"/>|
 |:--:|
 |*A) Using a microscope, multiple images were taken at fixed intervals of height (Δh). By taking each pixel of greatest focus we construct a focus stack from the stack of color images. B) By comparing the amount of spatial detail for each image and finding the height that maximizes it for each pixel, we approximated the 3D eye surface. C) The 3D eye surface (left) is modeled as a sphere (middle) resulting in small errors (right). The sphere provided us with an approximate radius of curvature for calculating interommatidial angles and FOV. D) The spherical model was a good fit (R2≅ .8) for all three genotypes.*|
