@@ -34,9 +34,9 @@ Wouldn't it be nice if a program could count these ommatidia automatically? Peop
 <div id="ODA"/>
 ## Ommatidia Detecting Algorithm (ODA) 
 
-After many hours of strained eyes and greuling ommatidia counting, I developed a pretty simple algorithm to get my computer to count ommatidia for me. Fortunately, it has generated counts and measurements that align well with manual measurements and measurements in the literature. That is detailed here in our preprint: https://doi.org/10.1101/2020.12.11.422154.
+After many hours of strained eyes and greuling ommatidia counting, I developed a pretty simple algorithm to get my computer to count ommatidia for me. Fortunately, it has generated counts and measurements that align well with manual measurements and measurements in the literature. That is detailed here in our [preprint](https://doi.org/10.1101/2020.12.11.422154).
 
-|<img src="figs/eye_gratings.png" width=600)/>|
+|<a href='figs/eye_gratings.png'><img src='figs/eye_gratings.png' width=600)/></a>|
 |:--:|
 |*General Pipeline of the ODA*|
 
