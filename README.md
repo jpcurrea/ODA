@@ -1,13 +1,13 @@
-# ODA
+# Ommatidia Detecting Algorithm (ODA)
 A Python library for automating the counting and measuring of ommatidia in images. Our [preprint](https://doi.org/10.1101/2020.12.11.422154) is in review at Communications Biology.
 ## Contents
 - [On Counting Ommatidia](#intro)
-- [Ommatidia Detecting Algorithm (ODA)](#ODA)
+- [ODA](#ODA)
 - [Installation](#install)
 - [Documentation](#documentation)
-    - [Eye: Individual Image of an Eye](#documentation_1)
-    - [EyeStack: Focus Stack of an Eye](#documentation_2)
-    - [CTStack: MicroCT of an Eye](#documentation_3)
+    - [Eye: Individual Image](#documentation_1)
+    - [EyeStack: Focus Stack](#documentation_2)
+    - [CTStack: MicroCT](#documentation_3)
 <div id="intro"/>
 ## On Counting Ommatidia 
 
@@ -32,11 +32,11 @@ Plus, as opposed to our camera-type eyes, many of the structures limiting the vi
 Wouldn't it be nice if a program could count these ommatidia automatically? People have developed programs that beat grand champions in chess or generate fake videos of past presidents. If computers can drive cars and recognize faces, shouldn't they be able to detect ommatidia? Introducing the ..
 
 <div id="ODA"/>
-## Ommatidia Detecting Algorithm (ODA) 
+## ODA
 
 After many hours of strained eyes and greuling ommatidia counting, I developed a pretty simple algorithm to get my computer to count ommatidia for me. Fortunately, it has generated counts and measurements that align well with manual measurements and measurements in the literature. That is detailed here in our [preprint](https://doi.org/10.1101/2020.12.11.422154).
 
-|<a href='figs/eye_gratings.png'><img src='figs/eye_gratings.png' width=600)/></a>|
+|<img src="figs/eye_gratings.png" width=600/>|
 |:--:|
 |*General Pipeline of the ODA*|
 
