@@ -2,14 +2,5 @@ remote_theme: pages-themes/minimal@v0.2.0
 plugins:
 - jekyll-remote-theme # add this line to the plugins list if you already have one
 title: Ommatidia Detecting Algorithm (ODA)
-description: 
-## Contents
-1. [On Counting Ommatidia](#intro)
-2. [Ommatidia Detecting Algorithm (ODA)](#ODA)
-3. [Installation](#install)
-4. [Documentation](#documentation)
-    a. [Eye: Individual Image of an Eye](#documentation_1)
-    b. [EyeStack: Focus Stack of an Eye](#documentation_2)
-    c. [CTStack: MicroCT of an Eye](#documentation_3)
 show_downloads: False
 logo: figs/eye_diagram.png
