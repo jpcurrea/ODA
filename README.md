@@ -583,7 +583,7 @@ class CTStack(Stack):
 
 The ODA-3D works by converting the 3D dataset of an eye into 2D images by projecting the 3D eye surface onto 2D planes perpendicular to the surface and then applying the 2D ODA to segment the dataset into blobls correspoding to each ommatidium. There are special considerations for eyes with ommatidia askew to the eye surface. For details on the pipeline, see the [preprint](https://doi.org/10.1101/2020.12.11.422154).
 
-|<img src="figs/oda3d_block_diagram.png" width="365"/>|<a href="figs/oda3d_demo.png"><img src="figs/oda3d_demo.png" width="800"/></a>|
+|<img src="figs/oda3d_block_diagram.png" width="250"/>|<a href="figs/oda3d_demo.png"><img src="figs/oda3d_demo.png" width="550"/></a>|
 |:--:|:--:|
 
 #### Time Saved
@@ -591,7 +591,7 @@ The ODA-3D works by converting the 3D dataset of an eye into 2D images by projec
 We profiled the performance of the ODA-3D on 4 different datasets in comparison to estimates of how long they would take to measure and count by hand. The results suggested that the ODA is very accurate and can perform ~1,000 times faster than manual measurements.
 | Species Comparison | Benchmark |
 |:--:|:--:|
-|<a href="figs/ctstack_demo.png"><img src="figs/ctstack_demo.png" width="1000"/></a>|<img src="figs/oda3d_benchmarks.png" width="180"/>|
+|<a href="figs/ctstack_demo.png"><img src="figs/ctstack_demo.png" width="600"/></a>|<img src="figs/oda3d_benchmarks.png" width="200"/>|
 
 #### Processing a CTStack
 
