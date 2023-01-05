@@ -13,13 +13,13 @@ table {
 // }
 
 header {
-    max-width: 200px;
-    min-width: 100px;
+    max-width: 100px;
+    min-width: 50px;
 }
 
 section {
     min-width: 100px;
-    max-width: 600px;
+    max-width: 500px;
 }
 
 code {
@@ -27,5 +27,6 @@ code {
 		 Terminal, Consolas, Liberation Mono, DejaVu Sans Mono,
 		 Courier New, monospace;
     color:#333;
-    font-size: 10px;
+    font-size: 12px;
+    line-height: 75%;
 }
