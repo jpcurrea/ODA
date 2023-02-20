@@ -1143,9 +1143,10 @@ class Layer:
             if (self.image[..., 0] == self.image.mean(-1)).mean() == 1:
                 self.image = self.image[(..., 0)]
                 self.bw = True
-        self.image_bw = self.image.astype('uint8')
         if self.bw:
-            self.image_bw = rgb_2_gray(self.image)
+            self.image_bw = self.image.astype('uint8')
+        else:
+            self.image_bw = rgb_2_gray(self.image.astype('uint8'))
         return self.image
 
     def load_memmap(self, filename=None):
