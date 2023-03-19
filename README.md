@@ -52,8 +52,9 @@ That will install the dependencies and module but if you want to test the code b
 1. Open a terminal and change into the desired folder. Use git to clone the github repository: <br>```git clone https://github.com/jpcurrea/ODA.git```
 2. Use pip to install the module and dependencies: <br>```cd ODA```<br>```pip install .```
 This should download additional files including 3 test datasets for testing.
-Note that sometimes python and pip get stored as python3 and pip3, so if python and pip don't work in the terminal, run: <br>```pip install .```
+Note that sometimes python and pip get stored as python3 and pip3, so if python and pip don't work in the terminal, run: <br>```pip3 install .```
 3. Run the test scripts to see if everythin installed correctly:<br>```cd tests```<br>```python test_all.py```
+Like above, you may need to type the following instead: <br>```python test_all.py```
 
 If the test script runs, it'll run 3 tests attempting to detect ommatidia in 1) an individual image of an eye, 2) a depth or focus stack of images of one eye, and 3) a CT stack of one eye. If they work, each will display the results and should have around 900 ommatidia. If you run into trouble with this or generate different results, feel free to contact Pablo.
 

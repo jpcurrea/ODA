@@ -115,32 +115,32 @@ class Grating():
             self.plot.set_data(self.img)
 
 
-#3 different gratings with different contrasts and sfs
-fig = plt.figure(figsize=(5,5))
-i = 1
-cs = np.array([.1, .5, 1])
-# sfs = np.round(1/np.array([18, 36, 72]), 3)
-sfs = np.array([.01, .05, .1])
-for c in cs[::-1]:
-    for sf in sfs:
-        ax = plt.subplot(3, 3, i)
-        g = Grating(sf=sf, contrast=c, window=None)
-        g.fig = fig
-        g.display(ax=ax)
-        ax.set_xticks([])
-        ax.set_yticks([])
-        if (i - 1)%3 == 0:
-            plt.ylabel(c)
-        if i > 6:
-            plt.xlabel(sf)
-        if i == 4:
-            plt.ylabel(f"Michelson Contrast\n{c}")
-        if i == 8:
-            plt.xlabel(f"{sf}\nSpatial Frequency\n(Cyc/$\degree$)")
-        i += 1
-#plt.suptitle("gratings vary by contrast and spatial frequency")
-plt.tight_layout()
-plt.show()
+# #3 different gratings with different contrasts and sfs
+# fig = plt.figure(figsize=(5,5))
+# i = 1
+# cs = np.array([.1, .5, 1])
+# # sfs = np.round(1/np.array([18, 36, 72]), 3)
+# sfs = np.array([.01, .05, .1])
+# for c in cs[::-1]:
+#     for sf in sfs:
+#         ax = plt.subplot(3, 3, i)
+#         g = Grating(sf=sf, contrast=c, window=None)
+#         g.fig = fig
+#         g.display(ax=ax)
+#         ax.set_xticks([])
+#         ax.set_yticks([])
+#         if (i - 1)%3 == 0:
+#             plt.ylabel(c)
+#         if i > 6:
+#             plt.xlabel(sf)
+#         if i == 4:
+#             plt.ylabel(f"Michelson Contrast\n{c}")
+#         if i == 8:
+#             plt.xlabel(f"{sf}\nSpatial Frequency\n(Cyc/$\degree$)")
+#         i += 1
+# #plt.suptitle("gratings vary by contrast and spatial frequency")
+# plt.tight_layout()
+# plt.show()
 
 def process_reciprocal(img, xvals, yvals, num_gratings=1):
     """Process grating information from the reciprocal image of an input array.
