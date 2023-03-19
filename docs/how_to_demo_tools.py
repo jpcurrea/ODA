@@ -8,7 +8,7 @@ from scipy import signal
 from scipy.signal import gaussian
 from skimage import feature
 
-%matplotlib inline
+# %matplotlib inline
 
 red = (0.7686274509803922, 0.3058823529411765, 0.3215686274509804)
 blue = (0.2980392156862745, 0.4470588235294118, 0.6901960784313725)
@@ -136,7 +136,7 @@ for c in cs[::-1]:
         if i == 4:
             plt.ylabel(f"Michelson Contrast\n{c}")
         if i == 8:
-            plt.xlabel(f"{sf}\nSpatial Frequency\n(Cyc/°)")
+            plt.xlabel(f"{sf}\nSpatial Frequency\n(Cyc/$\degree$)")
         i += 1
 #plt.suptitle("gratings vary by contrast and spatial frequency")
 plt.tight_layout()
@@ -190,13 +190,14 @@ def process_reciprocal(img, xvals, yvals, num_gratings=1):
         xfreq_grid, yfreq_grid, power, cmap='Greys', shading='auto',
         norm=matplotlib.colors.LogNorm())
     reciprocal_ax.set_aspect('equal')
-    reciprocal_ax.set_ylabel("Y-frequency (cyc/°)")
-    reciprocal_ax.set_xlabel("X-frequency (cyc/°)")
+    reciprocal_ax.set_ylabel("Y-frequency (cyc/$\degree$)")
+    reciprocal_ax.set_xlabel("X-frequency (cyc/$\degree$)")
     reciprocal_ax.set_title("Reciprocal Image")
     # add colorbar ax
     divider = make_axes_locatable(reciprocal_ax)
     cax = divider.append_axes('right', size='5%', pad=0.05)
     cbar = fig.colorbar(reciprocal_img, cax=cax, orientation='vertical')
+    cbar.ax.get_yaxis().labelpad = 15
     cbar.set_label('Power', rotation=270)
     # remove splines
     for ax in [grating_ax, reciprocal_ax]:
@@ -221,10 +222,21 @@ def process_reciprocal(img, xvals, yvals, num_gratings=1):
     for num, (x, y, color, angle) in enumerate(zip(xfreq_peaks[include], yfreq_peaks[include], colors, angles[include])):
         radius = np.sqrt(x**2 + y**2)
         #reciprocal_ax.plot([0, x], [0, y], color=red)
-        reciprocal_ax.arrow(x=0, y=0, dx=x, dy=y, color=color, width=.001, length_includes_head=True, zorder=2)
+        lbl = f"{np.round(angle*180/np.pi, 3)}$\degree$, {np.round(radius, 3)} cpd"
+        reciprocal_ax.arrow(x=0, y=0, dx=x, dy=y, color=color, width=.01, length_includes_head=True, zorder=2, )
+        # reciprocal_ax.annotate(
+        #     lbl, xy=(x, y),
+        #     xycoords='data',
+        #     xytext=(0, 0),
+        #     textcoords='data',
+        #     arrowprops=dict(arrowstyle= '<|-|>',
+        #                     color='blue',
+        #                     lw=3.5,
+        #                     ls='--')
+        #    )
         # note the coordinates
-        reciprocal_ax.annotate(f"({np.round(x, 3)},{np.round(y, 3)})", (x,y), 
-                               ha='left', color=color, va='bottom', zorder=2)
+        # reciprocal_ax.annotate(f"({np.round(x, 3)},{np.round(y, 3)})", (x,y), 
+        #                        ha='left', color=color, va='bottom', zorder=2)
         # note the polar angle
         x_lbl = max(0, x/2)
         va = 'bottom'
@@ -234,8 +246,8 @@ def process_reciprocal(img, xvals, yvals, num_gratings=1):
             ha='right'
         elif num == 2:
             va = 'top'
-        reciprocal_ax.annotate(f"{np.round(angle*180/np.pi, 3)}°", (x_lbl,0), 
-                               ha=ha, color=color, va=va, zorder=2)
+        # reciprocal_ax.annotate(f"{np.round(angle*180/np.pi, 3)}$\degree$", (x_lbl, 0), 
+        #                        ha=ha, color=color, va=va, zorder=2)
         # note the radius
         y_lbl = y/2
         x_lbl = x/2
@@ -259,6 +271,8 @@ def process_reciprocal(img, xvals, yvals, num_gratings=1):
     reciprocal_ax.set_xlim(-dist, dist)
     reciprocal_ax.set_ylim(-dist, dist)
 
+    plt.tight_layout()
+
     # print the point estimates
     orientations = np.arctan2(ynorm, xnorm)
     print(f"max x-frequencies=\t{xfreq_peaks}")
@@ -266,7 +280,7 @@ def process_reciprocal(img, xvals, yvals, num_gratings=1):
     print(f"spatial frequency=\t{spatial_freq_peaks}")
     print(f"orientation=\t\t{orientations*180/np.pi}")
 
-    def process_reciprocal_smooth(img, xvals, yvals, num_gratings=1):
+def process_reciprocal_smooth(img, xvals, yvals, num_gratings=1):
     """Process grating information from the reciprocal image of an input array.
     
     
@@ -353,10 +367,10 @@ def process_reciprocal(img, xvals, yvals, num_gratings=1):
     for num, (x, y, color, angle) in enumerate(zip(xfreq_peaks[include], yfreq_peaks[include], colors, angles[include])):
         radius = np.sqrt(x**2 + y**2)
         #reciprocal_ax.plot([0, x], [0, y], color=red)
-        reciprocal_ax.arrow(x=0, y=0, dx=x, dy=y, color=color, width=.001, length_includes_head=True, zorder=2)
+        reciprocal_ax.arrow(x=0, y=0, dx=x, dy=y, color=color, width=.01, length_includes_head=True, zorder=2)
         # note the coordinates
-        reciprocal_ax.annotate(f"({np.round(x, 3)},{np.round(y, 3)})", (x,y), 
-                               ha='left', color=color, va='bottom', zorder=2)
+        # reciprocal_ax.annotate(f"({np.round(x, 3)},{np.round(y, 3)})", (x,y), 
+        #                     ha='left', color=color, va='bottom', zorder=2)
         # note the polar angle
         x_lbl = max(0, x/2)
         va = 'bottom'
@@ -366,8 +380,8 @@ def process_reciprocal(img, xvals, yvals, num_gratings=1):
             ha='right'
         elif num == 2:
             va = 'top'
-        reciprocal_ax.annotate(f"{np.round(angle*180/np.pi, 3)}°", (x_lbl,0), 
-                               ha=ha, color=color, va=va, zorder=2)
+        # reciprocal_ax.annotate(f"{np.round(angle*180/np.pi, 3)}", (x_lbl,0), 
+        #                     ha=ha, color=color, va=va, zorder=2)
         # note the radius
         y_lbl = y/2
         x_lbl = x/2
@@ -380,7 +394,7 @@ def process_reciprocal(img, xvals, yvals, num_gratings=1):
         else:
             va = 'bottom'
         reciprocal_ax.annotate(f"{np.round(radius, 3)}cyc/rad", (x_lbl,y_lbl), 
-                               ha=ha, color=color, va=va, zorder=2)
+                            ha=ha, color=color, va=va, zorder=2)
         num += 1
     spatial_freq_peaks = np.sqrt(xfreq_peaks**2 + yfreq_peaks**2)
     xnorm = xfreq_peaks/spatial_freq_peaks
@@ -401,4 +415,7 @@ def process_reciprocal(img, xvals, yvals, num_gratings=1):
         'x_freq' : xfreq_peaks,
         'y_freq' : yfreq_peaks,
         'total_freq' : spatial_freq_peaks}
+    
+    plt.tight_layout()
+
     return fft, xfreq_grid, yfreq_grid, results

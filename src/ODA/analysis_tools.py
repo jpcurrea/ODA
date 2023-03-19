@@ -32,9 +32,9 @@ rgb_2_gray(rgb) : np.ndarray
 from functools import partial
 import h5py
 # when running from pip install:
-from .interfaces import *
+# from .interfaces import *
 # when runnning locally:
-# from interfaces import *
+from interfaces import *
 import math
 import matplotlib
 from matplotlib import colors, mlab
@@ -74,6 +74,7 @@ blue, green, yellow, orange, red, purple = [
 if 'app' not in globals():
     app = QApplication([])
 
+
 def print_progress(part, whole):
     import sys
     prop = float(part) / float(whole)
@@ -81,8 +82,6 @@ def print_progress(part, whole):
     sys.stdout.write('[%-20s] %d%%' % ('=' * int(20 * prop), 100 * prop))
     sys.stdout.flush()
 
-for n in range(100):
-    print_progress(n, 100)
 
 def load_image(fn):
     """Import an image as a numpy array using the PIL."""
@@ -1783,7 +1782,10 @@ class Stack:
         self.pixel_size = pixel_size
         self.depth_size = depth_size
         self.fns = os.listdir(self.dirname)
-        self.fns = sorted([os.path.join(self.dirname, f) for f in self.fns])
+        try:
+            self.fns = sorted([os.path.join(self.dirname, f) for f in self.fns])
+        except:
+            breakpoint()
         self.fns = [f for f in self.fns if f.endswith(img_extension)]
         self.layers = []
         self.bw = bw
@@ -1978,10 +1980,7 @@ class EyeStack(Stack):
     def crop_eyes(self):
         """Crop each layer."""
         assert len(self.layers) > 0, f"No layers loaded yet. Try running {self.load}."
-        try:
-            self.load_masks(mask_fn=(self.eye_mask_fn), mask_arr=(self.eye_mask))
-        except:
-            breakpoint()
+        self.load_masks(mask_fn=(self.eye_mask_fn), mask_arr=(self.eye_mask))
         new_layers = []
         for layer in self.layers:
             new_layers += [layer.crop_eye()]
@@ -2246,6 +2245,8 @@ class CTStack(Stack):
             self.dtype = first_layer.image.dtype
         for key in self.database.keys():
             setattr(self, key, self.database[key])
+        for key in self.database.attrs.keys():
+            setattr(self, key, self.database.attrs[key])
         files_to_load = [
             os.path.join(self.dirname, 'ommatidial_data.pkl'),
             os.path.join(self.dirname, 'interommatidial_data.pkl')]
@@ -2336,24 +2337,21 @@ class CTStack(Stack):
             The maximum value for an inclusing filter, defaulting to 
             the maximum.
         """
-        if 'points' in dir(self):
-            del self.points
-            if 'points' in self.database:
-                del self.database['points']
-        self.points = self.database.create_dataset(
-            'points', data=(np.zeros((1000, 3))), dtype=float,
-            chunks=(1000, 3), maxshape=(None, 3))
-        self.points_subset = self.database.create_dataset(
-            'points_subset', data=(np.zeros((0, 3))), dtype=float,
-            chunks=(1000, 3), maxshape=(None, 3))
+        for lbl in ['points', 'points_original', 'points_subset']:
+            if lbl in dir(self):
+                delattr(self, lbl)
+            if lbl in self.database:
+                del self.database[lbl]
+            dataset = self.database.create_dataset(
+                lbl, data=(np.zeros((0, 3))), dtype=float,
+                chunks=(1000, 3), maxshape=(None, 3))
+            self.__setattr__(lbl, dataset)
         first_layer = Layer(self.fns[0])
         dirname, basename = os.path.split(first_layer.filename)
         if high is None:
             first_layer.load()
             dtype = first_layer.image.dtype
             high = np.iinfo(dtype).max
-        if self.points.shape[0] > 0:
-            self.points.resize(0, axis=0)
         print("Importing stack layer by layer:")
         for num, layer in enumerate(self.iter_layers()):
             layer.load()
@@ -2361,13 +2359,14 @@ class CTStack(Stack):
             if np.any(include):
                 x, y = np.where(include)
                 pts = np.array([
-                 np.repeat(
-                     float(num) * self.depth_size, len(x)),
+                    np.repeat(float(num) * self.depth_size, len(x)),
                     self.pixel_size * x.astype(float),
                     self.pixel_size * y.astype(float)]).T
-                self.points.resize((
-                    self.points.shape[0] + len(x), 3))
-                self.points[-len(x):] = pts
+                # store two copies of the points dataset
+                for dataset in [self.points, self.points_original]:
+                    dataset.resize((
+                        dataset.shape[0] + len(x), 3))
+                    dataset[-len(x):] = pts
                 num_points = len(x)
                 sample = math.ceil(0.01 * num_points)
                 inds = np.random.choice((np.arange(num_points)),
@@ -2403,6 +2402,8 @@ class CTStack(Stack):
         """
         assert self.points.shape[0] > 0, ("No points have been loaded. Try running"+
                                           f" {self.import_stack} first.")
+        if not np.all(self.points[:] == self.points_original[:]):
+            self.points[:] = self.points_original[:]
         ind_range = range(len(self.points))
         num_samples = min(len(self.points), 1000000)
         inds = np.random.choice(ind_range, size=num_samples, replace=False)
@@ -2420,11 +2421,32 @@ class CTStack(Stack):
         sphere = SphereFit(subset)
         center = sphere.center
         self.center = center
+        # center self.points using the sphere's center and rotate so that the 
+        # center of the visual field is centered
+        # keep track of the translation and rotation applied to the coordinates
+        self.sphere_center = self.center
+        # self.rot_matrix1 /= np.linalg.norm(self.rot_matrix1)
         pts = self.points[:]
         pts = pts - self.center[np.newaxis]
+        # rotate the points
         pts = rotate(pts, (sphere.rot_ang1), axis=0).T
         pts = rotate(pts, (sphere.rot_ang2), axis=2).T
         self.points[:] = pts
+        # breakpoint()
+        # keep track of the rotation by rotating the standard basis by the same amount
+        # self.basis1 = np.eye(3)
+        # self.basis1 = rotate(self.basis1, (sphere.rot_ang1), axis=0).T
+        # self.basis1 = rotate(self.basis1, (sphere.rot_ang2), axis=2).T
+        # test: check that we can use basis1 to rotate the original coordinates
+        # sub_pts = np.copy(self.points[1000:1100])
+        # sub_pts = np.dot(self.basis1, sub_pts.T).T
+        # sub_pts += self.sphere_center
+        # sub_pts_og = np.copy(self.points_original[1000:1100])
+        # diff = sub_pts - sub_pts_og
+        # store the two angles
+        for lbl, val in zip(['center', 'rot1', 'rot2'], [sphere.center, sphere.rot_ang1, sphere.rot_ang2]):
+            self.database.attrs[lbl] = val
+        self.save_database()
         subset -= center[np.newaxis, :]
         # pts.surface_predict(image_size=10000)
         self.shell = pts
@@ -2964,7 +2986,7 @@ class CTStack(Stack):
             radius) coordinates. 
         """
         assert 'ommatidial_data' in dir(self), (
-            f"No clustered data found. Try running {selfind_ommatidial_clusters}")
+            f"No clustered data found. Try running {self.find_ommatidial_clusters}")
         labels = self.labels[:]
         label_set = self.ommatidial_data.label.values
         centers = self.ommatidial_data[['x', 'y', 'z']].values
@@ -3888,6 +3910,7 @@ class CTStack(Stack):
         three_d : bool, default=False
             Whether to use pyqtgraph to plot the cross section in 3D.
         """
+        breakpoint()
         lbls = self.labels[:]
         lbls_set = np.arange(max(lbls) + 1)
         scrambled_lbls = np.random.permutation(lbls_set)
@@ -4894,29 +4917,6 @@ class CTStack(Stack):
                                           regular=regular, manual_edit=manual_edit,
                                           thickness=thickness)
             self.save_database()
-            # if manual_edit:
-            #     # make a raster image of the polar coordinates
-            #     pts = Points(self.pts[:], sphere_fit=False, rotate_com=False,
-            #                  spherical_conversion=False, polar=self.polar[:])
-            #     # calculate pixel size based on shortest distances
-            #     dists_tree = spatial.KDTree(pts.polar[:, :2])
-            #     dists, inds = dists_tree.query((pts.polar[:, :2]), k=2)
-            #     min_dist = 2 * np.mean(dists[:, 1])
-            #     raster, (theta_vals, phi_vals) = pts.rasterize(pixel_length=min_dist)
-            #     pixel_size = phi_vals[1] - phi_vals[0]
-            #     # generate a boolean mask by smoothing the thresholded raster image
-            #     mask = raster > 0
-            #     mask = ndimage.gaussian_filter(mask.astype(float), 2)
-            #     mask /= mask.max()
-            #     thresh = 0.1
-            #     mask = mask > thresh
-            #     mask = 255 * mask.astype(int)
-            #     raster = 255 * (raster / raster.max())
-            #     raster = raster.astype('uint8')
-            #     # use OmmatidiaGUI to fix coordinates
-            #     fix_ommatidia = OmmatidiaGUI(raster, coords_arr=pts.polar[:, :2])
-            #     self.ommatidial_inds = fix_ommatidia.coords
-            #     self.ommatidia = self.pixel_size * self.ommatidial_inds
             if self.display:
                 self.plot_ommatidial_clusters(three_d)
         print('\nOmmatidial clusters loaded.')
@@ -4936,7 +4936,76 @@ class CTStack(Stack):
                 self.plot_interommatidial_data(three_d=three_d, scatter=plot_scatter)
         print()
 
-    def plot_data_3d(self):
+    def plot_raw_scan(self, raw_scan_folder, bin_size=4, window=None, app=None):
+        """Plot the raw scan as a Volume."""
+        # load the raw data into a 4D array (x, y, z, RGBA)
+        stack = Stack(raw_scan_folder, img_extension=self.img_extension)
+        # go through each layer and load the pixel values into 
+        first_layer = Layer(stack.fns[0])
+        img = first_layer.load()
+        if img.ndim == 2:
+            height, width = img.shape
+            num_channels = 1
+        elif img.ndimg == 3:
+            height, width, num_channels = img.shape
+        # make an empty volume to place all the values
+        # new_img = ndimage.zoom(img, 1./bin_size)
+        num_layers = math.ceil(len(stack.fns) / bin_size)
+        # new_height, new_width = new_img.shape
+        new_height, new_width = int(height / bin_size), int(width / bin_size)
+        # volume = np.zeros((num_layers, new_height, new_width, num_channels), dtype=img.dtype)
+        volume = np.zeros((num_layers+1, new_height, new_width, num_channels), dtype='uint8')
+        # bin average the layers
+        layer_num = 0
+        height_trunc, width_trunc = bin_size * (height // bin_size), bin_size * (width // bin_size)
+        img_avg = []
+        for num, layer in enumerate(stack.iter_layers()):
+            img = layer.load()
+            # img_avg += [img]
+            img_avg += [img // (2 ** 8)]
+            # if len(img_avg) == bin_size or num == len(stack.fns):
+            if num % bin_size == 0 or num == len(stack.fns)-1:
+                # img_avg = (np.array(img_avg) // (2 ** 8)).astype('uint8')
+                num_sub_layers = len(img_avg)
+                img_avg = np.asarray(img_avg)
+                # img_avg = np.asarray(img_avg).astype('uint16')
+                # bin average the image
+                img_avg = img_avg[:, :height_trunc, :width_trunc]
+                img_avg = img_avg.reshape((num_sub_layers, height_trunc // bin_size, bin_size, width_trunc // bin_size, bin_size))
+                img_avg = img_avg.mean((0, 2, 4))
+                # set the average in the volume
+                try:
+                    # volume[layer_num, ..., 0] = img_avg
+                    volume[num // bin_size, ..., 0] = img_avg
+                except:
+                    breakpoint()
+                layer_num += 1
+                # reset img_avg
+                img_avg = []
+            print_progress(num, len(stack.fns))
+        std = 1.5
+        zeros = volume == 0
+        # volume = ndimage.gaussian_filter(volume, (std, std, std, 0), mode='nearest')
+        # volume[zeros] *= 0
+        # reduce the volume along the first dimension by averaging
+        volume_rgb = plt.cm.viridis(volume[..., 0])
+        # volume_rgb = plt.cm.gray(volume[..., 0])
+        volume_rgb *= 255
+        # zeros = np.where(volume == 0)
+        # volume_rgb[zeros[:-1]] = 0
+        # alpha = volume[..., 0]
+        # alpha[alpha < 5] *= 0
+        alpha = np.copy(volume[..., 0])
+        include = alpha > 0
+        alpha[include] = 20
+        volume_rgb[..., -1] = alpha
+        # volume_rgb = np.repeat(volume, 4, axis=-1)
+        # volume_rgb[..., -1] = 255
+        self.volume = gl.GLVolumeItem(volume_rgb, sliceDensity=1)
+        self.volume.scale(self.depth_size, self.pixel_size, self.pixel_size)
+        window.addItem(self.volume)
+
+    def plot_data_3d(self, raw_scan_folder=None):
         """Use pyqtgraph to plot in 3D any of the results.
         """
         # import widgets for a GUI
@@ -5023,6 +5092,102 @@ class CTStack(Stack):
         main_window.setCentralWidget(widget)
         # resize window to show both the buttons and GLViewWidget
         # run exec loop
+        # self.plot_ommatidial_clusters()
+        if raw_scan_folder is not None:
+            self.plot_raw_scan(raw_scan_folder, window=display_window, app=app)
+        main_window.show()
+        app.exec()
+
+    def plot_data_volume(self, raw_scan_folder=None):
+        """Use pyqtgraph to plot in 3D any of the results.
+        """
+        # import widgets for a GUI
+        from PyQt5.QtWidgets import (
+            QApplication,
+            QLabel,
+            QMainWindow,
+            QPushButton,
+            QVBoxLayout,
+            QHBoxLayout,
+            QWidget)
+        # what datasets are available?
+        conditions = {'stack':'points' in dir(self), 
+                      'cross-sections':'theta' in dir(self), 
+                      'cluster labels':'labels' in dir(self), 
+                      'ommatidial data':'ommatidial_data' in dir(self), 
+                      'interommatidial data':'interommatidial_data' in dir(self)}
+        # these are the functions
+        functions = [
+            self.plot_raw_data,
+            self.plot_cross_section,
+            self.plot_ommatidial_clusters,
+            self.plot_ommatidial_data_3d,
+            self.plot_interommatidial_data_3d]
+        # make a main window with options for displaying different graphs
+        app = QApplication([])
+        main_window = QMainWindow()
+        main_window.resize(640, 480)
+        # make a GLViewWidget for displaying each of the scatterplots
+        display_window = gl.GLViewWidget()
+        # make a layout to place the display window inside the main window
+        layout = QHBoxLayout()
+        # main_window.addItem(display_window)
+        display_window.show()
+        # make a frame for placing all the buttons
+        box_layout = QVBoxLayout()
+        # make buttons for all the available datasets
+        buttons = []
+        for (title, success), function in zip(conditions.items(), functions):
+            if success:
+                button = QRadioButton(title)
+                button.clicked.connect(partial(function, three_d=True, app=app,
+                                               window=display_window,
+                                               main_window=main_window))
+                button.released.connect(display_window.clear)
+                print(function)
+                box_layout.addWidget(button)
+                buttons += [button]
+        # add sliders for minimum and maximum values in the colormap
+        # class MplCanvas(FigureCanvasQTAgg):
+        #     def __init__(self, parent=None, width=2, height=4, dpi=100):
+        #         # fig = plt.Figure(figsize=(width, height), dpi=dpi)
+        #         # self.axes = fig.add_subplot(111)
+        #         fig, self.axes = fig.suplots(ncols=3)
+        #         super(MplCanvas, self).__init__(fig)
+
+        # plt_plot = MplCanvas(main_window)
+        # # setup attributes to modify in the respective functions, updating the values of
+        # # the slider
+        # self.vmin, self.vmax = 0, 255
+        # self.vmin_slider = Slider(plt_plot.axes[0], 'min', self.vmin, self.vmax_possible,
+        #                           valinit=self.vmin, valfmt='%d', color='k',
+        #                           orientation='vertical')
+        # self.vmin_slider.on_changed(
+
+        # # make a function to run everytime one of the buttons is clicked
+        # def update_sliders(self):
+            
+
+        # plt_plot.axes.scatter(range(10), range(10))
+        # box_layout.addWidget(plt_plot)
+
+
+        # format widget
+        # widget = QWidget()
+        # widget.setLayout(box_layout)
+        # place buttons inside main window
+        # layout.addWidget(widget, 1)
+        layout.addLayout(box_layout, 1)
+        # place GLViewWidget inside main window too
+        layout.addWidget(display_window, 5)
+        widget = QWidget()
+        widget.setLayout(layout)
+        main_window.setCentralWidget(widget)
+        # resize window to show both the buttons and GLViewWidget
+        # run exec loop
+        # self.plot_ommatidial_clusters()
+        if raw_scan_folder is not None:
+            self.plot_raw_scan(raw_scan_folder, window=display_window, app=app)
         main_window.show()
         app.exec()
 

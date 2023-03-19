@@ -36,6 +36,7 @@ def rgb_to_hsv(rgb):
         ret = np.repeat(rgb, 3, axis=(-1))
     return ret
 
+
 # make a class for plotting a heatmap with distplots along the axes
 class VarSummary():
     def __init__(self, xs, ys, colorvals, cmap='viridis', image_size=10**5,
@@ -1326,8 +1327,8 @@ class ColorSelector:
 
     def start_up(self):
         """Run when ready to display."""
-        self.RS = matplotlib.widgets.RectangleSelector((self.original_image_ax),
-          (self.onselect), drawtype='box')
+        self.RS = matplotlib.widgets.RectangleSelector(
+            (self.original_image_ax), (self.onselect))
         matplotlib.pyplot.connect('key_press_event', self.toggle_selector)
         matplotlib.pyplot.show()
 
