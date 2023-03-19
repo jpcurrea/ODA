@@ -40,7 +40,7 @@ After many hours of strained eyes and greuling ommatidia counting, I developed a
 |:--:|
 |*General Pipeline of the ODA*|
 
-To get a feel for how the ODA works, check out [this python notebook](docs/oda_how_it_works.ipynb) or run it interactively on [Binder]()
+To get a feel for how the ODA works, check out [this python notebook](docs/oda_how_it_works.ipynb) or run it interactively in a [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/jpcurrea/ODA/HEAD?labpath=https%3A%2F%2Fgithub.com%2Fjpcurrea%2FODA%2Fblob%2Fmain%2Fdocs%2FODA%2520How%2520It%2520Works.ipynb).
 
 <div id='install'/>
 ## Installation
