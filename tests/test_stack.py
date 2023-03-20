@@ -1,7 +1,7 @@
-import sys
-sys.path.append("../src/ODA/")
-from analysis_tools import *
-# from ODA import *
+# import sys
+# sys.path.append("../src/ODA/")
+# from analysis_tools import *
+from ODA import *
 
 
 PIXEL_SIZE = (488.84896*2)**-1
