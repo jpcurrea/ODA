@@ -1,5 +1,5 @@
 # Ommatidia Detecting Algorithm (ODA)
-A Python library for automating the counting and measuring of ommatidia in images. Our [preprint](https://doi.org/10.1101/2020.12.11.422154) is in review at Communications Biology.
+A Python library for automating the counting and measuring of ommatidia in images. Our methods paper was [published Communications Biology](https://www.nature.com/articles/s42003-023-04575-x)!
 ## Contents
 - [On Counting Ommatidia](#intro)
 - [ODA](#ODA)
@@ -34,13 +34,13 @@ Wouldn't it be nice if a program could count these ommatidia automatically? Peop
 <div id="ODA"/>
 ## ODA
 
-After many hours of strained eyes and greuling ommatidia counting, I developed a pretty simple algorithm to get my computer to count ommatidia for me. Fortunately, it has generated counts and measurements that align well with manual measurements and measurements in the literature. That is detailed here in our [preprint](https://doi.org/10.1101/2020.12.11.422154).
+After many hours of strained eyes and greuling ommatidia counting, I developed a pretty simple algorithm to get my computer to count ommatidia for me. Fortunately, it has generated counts and measurements that align well with manual measurements and measurements in the literature. That is detailed here in our [methods paper](https://www.nature.com/articles/s42003-023-04575-x).
 
 |<img src="figs/eye_gratings.png" width=600/>|
 |:--:|
 |*General Pipeline of the ODA*|
 
-To get a feel for how the ODA works, check out [this python notebook](docs/oda_how_it_works.ipynb) or run it interactively in a [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/jpcurrea/ODA/HEAD?labpath=https%3A%2F%2Fgithub.com%2Fjpcurrea%2FODA%2Fblob%2Fmain%2Fdocs%2FODA%2520How%2520It%2520Works.ipynb).
+To get a feel for how the ODA works, check out [this python notebook](docs/oda_how_it_works.ipynb).
 
 <div id='install'/>
 ## Installation
@@ -65,50 +65,10 @@ We tried to provide useful docstrings for each class in the [code itself](https:
 <div id='documentation_1'/>
 ### 1. Image of an Eye
 
-```python
-class Eye(Layer):
-
-    def __init__(self, filename=None, arr=None, bw=False, pixel_size=1, 
-                 mask_fn=None, mask_arr=None):
-        """A class specifically for processing images of compound eyes. 
-        
-
-        Parameters
-        ----------
-        filename : str
-            The file path to the eye image.
-        bw : bool
-            Whether the image in greyscale.
-        pixel_size : float, default = 1
-            The actual length of the side of one pixel.
-        mask_fn : str, default = "mask.jpg"
-            The path to the sillhouetting mask image file.
-        mask : array_like, default = None
-            Boolean masking image with the same shape as the input image array.
-        
-        Methods
-        -------
-        get_eye_outline
-            Get the outline of the eye based on an eye mask.
-        get_eye_dimensions
-            Assuming an elliptical eye, get its length, width, and area.
-        crop_eye
-            Crop the image so that the frame is filled by the eye with padding.
-        get_ommatidia
-            Detect ommatidia coordinates assuming hex or square lattice.
-        measure_ommatidia
-            Measure ommatidial diameter using the ommatidia coordinates.
-        ommatidia_detecting_algorithm or oda
-            The complete algorithm for measuring ommatidia in images.
-        """
-        [...]
-```
-
-
 |Example Results|
 |:--:|
 |<a href="figs/ant_replicas_comparison.png"><img src="figs/ant_replicas_comparison.png" width="1000"/></a>|
-|*This comparison of the ODA on 5 different ant eye replicas was included in the [methods paper](https://doi.org/10.1101/2020.12.11.422154). The automated counts were 99% and the diameters were 93% of those measured by hand*|
+|*This comparison of the ODA on 5 different ant eye replicas was included in the [methods paper](https://www.nature.com/articles/s42003-023-04575-x). The automated counts were 99% and the diameters were 93% of those measured by hand*|
 
 The [Eye object](https://github.com/jpcurrea/ODA/blob/55684a97fb32a95f24d17eaf04c49253c98fee27/src/ODA/analysis_tools.py#L1268) takes in an eye image and an optional masking image to indicate which pixels correspond to the eye. You can also input the length of each pixel so that the program can provide actual measurements of length. Once instantiated, an Eye can run a number of methods on the image including cropping the eye, getting it's dimensions, finding ommatidia, and taking measurements of the eye. To run all of this in the appropriate order, run the Eye.ommatidia_detecting_algorithm method. Here's an example script for loading an individual Eye image. The following assumes that you cloned the tests folder from our github repository.
 
@@ -131,61 +91,7 @@ eye.oda(bright_peak=False, high_pass=True, plot=True,
 ``` 
 
 The script above uses the ODA to process the image tests/002.jpg using the mask image tests/002/mask.jpg and saving the image with the location of the ommatidia superimposed at the file "tests/002_ommatidia.svg". The main function here is the ommatidia_detecting_algorithm or oda method of the Eye object. Here's the docstring for that method:
-```python
-    def ommatidia_detecting_algorithm(self, bright_peak=True, fft_smoothing=5,
-                                      square_lattice=False, high_pass=False,
-                                      num_neighbors=3, sample_size=100, plot=False,
-                                      plot_fn=None, regular=True, manual_edit=False):
-        """The complete algorithm for measuring ommatidia in images.
 
-        
-        Parameters
-        ----------
-        bright_peak : bool, default=True
-            Whether the ommatidia are defined by brighter (vs. darker) peaks.
-        fft_smoothing : int, default=5
-            The standard deviation of a 2D gaussian filter applied to the 
-            reciprocal image before finding peaks.
-        square_lattice : bool, default=False
-            Whether this a square (rather than a hexagonal) lattice.
-        high_pass : bool, default=False
-            Whether to also filter frequencies below the fundamental one.
-        num_neighbors : int, default=6
-            The number of neighbors to check for measuring the ommatidial 
-            diameter. Defaults to 6, assuming a hexagonal lattice.
-        sample_size : int, default=100
-            The number of ommatidia near the center to include in diameter
-            estimation.
-        plot : bool, default=False
-            Whether to plot the eye with ommatidia and diameters superimposed.
-        plot_fn : str, default=None
-            Filename to save the plotted eye with superimposed ommatidia and 
-            their diameters.
-        regular : bool, default=False
-            Whether to assume the ommatidial lattice is approximately regular.
-        manual_edit : bool
-            Whether to allow the user to manually edit the ommatidia coordinates.
-
-        Attributes
-        ----------
-        eye_length : float
-            Major diameter of the fitted ellipse.
-        eye_width : float
-            Minor diameter of the fitted ellipse.
-        eye_area : float
-            Area of the fitted ellipse
-        ommatidia : np.ndarray
-            2D coordinates of N ommatidia with shape N x 2.
-        ommatidial_diameter_fft : float
-            The average wavelength of the fundamental frequencies, 
-            corresponding to the ommatidial diameters.
-        ommatidial_diameter : float
-            Average ommatidial diameter of sample near the mask center of mass.
-        ommatidial_diameter_SD : float
-            Standard deviation of ommatidial diameters in sample.
-        """
-    [...]
-```
 #### Processing a batch of Eyes
 Here's an example of how to run the ODA on a folder of images, collecting important measurements into a spreadsheet, eye_data.csv:
 
@@ -275,47 +181,7 @@ dataframe.to_csv("eye_data.csv", index=False)
 
 The [EyeStack object](https://github.com/jpcurrea/ODA/blob/55684a97fb32a95f24d17eaf04c49253c98fee27/src/ODA/analysis_tools.py#L1914) takes a folder of images representing the layers of a focus stack of an eye and an optional masking image. Once instantiated, an EyeStack can run a number of methods like the Eye object described above with additional 3D measurements allowing the approximation of interommatidial angle, field of view, and radius of curvature. 
 
-```python
-class EyeStack(Stack):
-
-    def __init__(self, dirname, img_extension='.jpg', bw=False, pixel_size=1, depth_size=1, mask_fn='mask.jpg', mask_arr=None):
-        """A special stack for handling a focus stack of fly eye images.
-
-        Parameters
-        ----------
-        img_extension : str, default=".jpg"
-            The image file extension used to avoid unwanted images.
-        bw : bool, default=False
-            Whether to treat the image as grayscale.
-        pixel_size : float, default=1
-            The real length of the side of one pixel in the image. Used for
-            converting from pixel into real distances.
-        depth_size : float, default=1
-            The real distance between stack layers. 
-        mask_fn : str, default="mask.jpg"
-            The filename of the boolean masking image.
-        mask_arr : array-like, default=None
-            2D boolean masking array.
-        
-        Attributes
-        ----------
-        eye : Eye
-            The Eye object of the focus stack of cropped image layers.
-        pixel_size : float, default=1
-            The real length of the side of one pixel.
-        depth_size : float, default=1
-            The real distance between stack layers.
-        eye_mask : array-like, default="mask.jpg"
-            2D boolean masking array.
-        ommatidia_polar : np.ndarray, default=None
-            The ommatidia locations in spherical coordinates relative to 
-            the best fitting sphere.
-        fns : list
-            The list of included filenames.
-        """
-        [...]
-```
-The 3D reconstruction works by comparing the level of focus of each pixel to that of the corresponding pixel in the other layers. Below is a figure from [another one of my projects](https://doi.org/10.1016/j.isci.2021.103637) that applied this method to compare the visual properties of vinegar flies (*D. melanogaster*) to two subspecies of a fly native to deserts in southwest North America (*D. mojavensis mojavensis* and *D. mojavensis baja*): 
+The 3D reconstruction works by comparing the level of focus of each pixel to that of the corresponding pixel in the other layers. Below is a figure from [another paper](https://doi.org/10.1016/j.isci.2021.103637) that applied this method to compare the visual properties of vinegar flies (*D. melanogaster*) to two subspecies of a fly native to deserts in southwest North America (*D. mojavensis mojavensis* and *D. mojavensis baja*): 
 
 |<img src="figs/stack_reconstruction.png" width="600"/>|
 |:--:|
@@ -345,73 +211,8 @@ st.oda_3d(high_pass=HIGH_PASS, plot_fn=OUTPUT_FN,
           bright_peak=BRIGH_PEAK, square_lattice=SQUARE_LATTICE)
 ``` 
 
-The script above uses a 3D version of the ODA to process the eye stack in tests/002/ using the mask file tests/002/mask.jpg and saving the eye image with the location of the ommatidia superimposed at the file "tests/stack_demo.svg". Here's the docstring for that method:
+The script above uses a [3D version of the ODA](https://github.com/jpcurrea/ODA/blob/55684a97fb32a95f24d17eaf04c49253c98fee27/src/ODA/analysis_tools.py#L2138) to process the eye stack in tests/002/ using the mask file tests/002/mask.jpg and saving the eye image with the location of the ommatidia superimposed at the file "tests/stack_demo.svg". 
 
-```python
-    def oda_3d(self, eye_stack_smoothing=0, bright_peak=True, fft_smoothing=5,
-               square_lattice=False, high_pass=False, num_neighbors=3, sample_size=100,
-               plot=False, plot_fn=None, use_memmaps=False, manual_edit=False):
-        """Detect ommatidia using the 3D surface data.
-
-        Parameters
-        ----------
-        eye_stack_smoothing : float, default=0
-            Std deviation of gaussian kernal used to smooth the eye surface.
-        bright_peak : bool, default=True
-            Whether the ommatidia are defined by brighter (vs. darker) peaks.
-        fft_smoothing : int, default=5
-            The standard deviation of a 2D gaussian filter applied to the 
-            reciprocal image before finding peaks.
-        square_lattice : bool, default=False
-            Whether this a square---rather than a hexagonal---lattice.
-        high_pass : bool, default=False
-            Whether to also filter frequencies below the fundamental one.
-        num_neighbors : int, default=6
-            The number of neighbors to check for measuring the ommatidial 
-            diameter. Defaults to 6, assuming a hexagonal lattice.
-        sample_size : int, default=100
-            The number of ommatidia near the center to include in diameter
-            estimation.
-        plot : bool, default=False
-            Whether to plot the eye with ommatidia and diameters superimposed.
-        plot_fn : str, default=None
-            Filename to save the plotted eye with superimposed ommatidia and 
-            their diameters.
-        use_memmaps : bool, default=False
-            Whether to use memory maps instead of loading the images to RAM.
-        manual_edit : bool, default=False
-            Whether to use a GUI to edit the results of the ODA.
-
-        Attributes
-        ----------
-        sphere : SphereFit
-            An OLS-fitted sphere to the 3D ommatidia coordinates. 
-            Transforms the points into polar coordinates relative to 
-            the fitted sphere.
-        fov_hull : float
-            The field of view of the convex hull of the ommatidia in
-            polar coordinates.
-        fov_long : float
-            The longest angle of view using the long diameter of the
-            ellipse fitted to ommatidia in polar coordinates.
-        fov_short : float, steradians
-            The shortest angle of view using the short diameter of 
-            the ellipse fitted to ommatidia in polar coordinates.
-        surface_area : float, steradians
-            The surface area of the sphere region given fov_hull and
-            sphere.radius.
-        io_angles : np.ndarray, rads
-            The approximate inter-ommatidial angles per ommatidium 
-            using eye.ommatidial_diameters and eye radius in rads.
-        io_angle : float, rad
-            The average approximate inter-ommatidial angle using 
-            eye.ommatidial_diameter / self.sphere.radius
-        io_angle_fft : float, rad
-            The average approximate inter-ommatidial angle using
-            eye.ommatidial_diameter_fft / self.sphere.radius
-        """
-        [...]
-```
 #### Processing a batch of EyeStacks
 Here's an example of how to run the ODA on a folder of subfolders containing focus stacks of insect eyes, collecting important measurements into a spreadsheet, eye_stack_data.csv:
 
@@ -516,79 +317,15 @@ dataframe.to_csv("eye_stack_data.csv", index=False)
 
 The [CTStack](https://github.com/jpcurrea/ODA/blob/55684a97fb32a95f24d17eaf04c49253c98fee27/src/ODA/analysis_tools.py#L2138) takes a folder of images representing the layers of a micro CT stack of an eye. This is presumed to be filtered enough that an initial voxel value filter is sufficient to include only the voxels of interest. Once instantiated, a CTStack can run a number of methods to measure the ommatidial and interommatidial data characteristic of the eye's optical performance. 
 
-Running the main method, ommatidial_detection_algorithm, produces an .h5 file with the intermittent data to produce two spreadsheets: ommatidial_data.csv and interommatidial_data.csv. These have ommatidia and interommatidial pairs as each row in the corresponding spreadsheet, containing relevant measurements of each such as their position, orientation, and size and variables pertinent to each dataset. It's designed to run and save in a modular fashion so that if the program crashes or is interrupted, the results can be loaded from the preceding module and run using new parameters. Here is the docstring of the CTStack object:
+Running the main method, ommatidial_detection_algorithm, produces an .h5 file with the intermittent data to produce two spreadsheets: ommatidial_data.csv and interommatidial_data.csv. These have ommatidia and interommatidial pairs as each row in the corresponding spreadsheet, containing relevant measurements of each such as their position, orientation, and size and variables pertinent to each dataset. It's designed to run and save in a modular fashion so that if the program crashes or is interrupted, the results can be loaded from the preceding module and run using new parameters.
 
-```python
-class CTStack(Stack):
-
-    def __init__(self, database_fn='_compound_eye_data.h5', **kwargs):
-        """A special stack for handling a CT stack of a compound eye.
-
-        Parameters
-        ----------
-        database_fn : str, default="_compoint_eye_data.h5"
-            The filename of the H5 database with loaded values.
-        dirname : str
-            Path to the directory containing the images to load.
-        img_extension : str
-            The file extension of the images to load.
-        bw : bool
-            Whether the images are greyscale.
-        pixel_size : float, default=1
-            Actual length of the side of a pixel.
-        depth_size : float, default=1
-            Actual depth interval between individual layers.
-
-        Attributes
-        ----------
-        layers : list
-            The list of image layers.
-        layer_class : Layer, Eye
-            The class to use for each layer.
-        img_extension : str
-            The file extension to use for importing images.
-        fns : list
-            The list of filenames included in the Stack.
-
-        Methods
-        -------
-        __del__
-        load_database
-            Initialize and load the H5 database.
-        close_database
-            Delete the H5PY database.
-        save_database
-            Save the H5PY database by closing and reopening it.
-        prefilter
-            Filter the layers and then save in a new folder.
-        import_stack
-            Filter the images including values between low and high.
-        get_cross_sections
-            Approximate surface splitting the inner and outer sections.
-        find_ommatidial_clusters
-            2D running window applying ODA to spherical projections.
-        measure_ommatidia
-            Take measurements of ommatidia using the ommatidial clusters.
-        measure_interommatidia
-            Use the anatomical axes to quickly measure interommatidial angles.
-        plot_raw_data, plot_cross_section, plot_ommatidial_clusters, 
-        plot_ommatidial_data, plot_ommatidial_data_3d, plot_interommatidial_data,
-        plot_interommatidial_data_3d, plot_data_3d 
-            Convenient functions for plotting the corresponding data.
-        ommatidia_detecting_algorithm
-            Apply the 3D ommatidia detecting algorithm (ODA-3D).
-        stats_summary
-            Calculate important statistics for whatever data is available.
-        """
-    [...]
-```
 #### ODA-3D
 
-The ODA-3D works by converting the 3D dataset of an eye into 2D images by projecting the 3D eye surface onto 2D planes perpendicular to the surface and then applying the 2D ODA to segment the dataset into blobls correspoding to each ommatidium. There are special considerations for eyes with ommatidia askew to the eye surface. For details on the pipeline, see the [preprint](https://doi.org/10.1101/2020.12.11.422154).
+The ODA-3D works by converting the 3D dataset of an eye into 2D images by projecting the 3D eye surface onto 2D planes perpendicular to the surface and then applying the 2D ODA to segment the dataset into blobls correspoding to each ommatidium. There are special considerations for eyes with ommatidia askew to the eye surface. For details on the pipeline, see the [methods paper](https://www.nature.com/articles/s42003-023-04575-x).
 
-|<img src="figs/oda3d_block_diagram.png" width="190"/>|<a href="figs/oda3d_demo.png"><img src="figs/oda3d_demo.png" width="410"/></a>|
+| The ODA-3D Pipeline | Bee Eye through the ODA-3D pipeline |
 |:--:|:--:|
-|* The ODA-3D Pipeline *|
+|<img src="figs/oda3d_block_diagram.png" width="190"/>|<a href="figs/oda3d_demo.png"><img src="figs/oda3d_demo.png" width="410"/></a>|
 
 #### Time Saved
 
