@@ -1,5 +1,5 @@
 # Ommatidia Detecting Algorithm (ODA)
-A Python library for automating the counting and measuring of ommatidia in images. Our methods paper was [published Communications Biology](https://www.nature.com/articles/s42003-023-04575-x)!
+A Python library for automating the counting and measuring of ommatidia in images. Our methods paper was [published in Communications Biology](https://www.nature.com/articles/s42003-023-04575-x)!
 ## Contents
 - [On Counting Ommatidia](#intro)
 - [ODA](#ODA)
