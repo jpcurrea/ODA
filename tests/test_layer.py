@@ -11,14 +11,15 @@ img = Layer(arr=img_arr)
 img.load_memmap()
 img.get_gradient()
 img.color_key()
-# mask_img = img.mask.astype('uint8')
-# mask_img = np.repeat(mask_img[..., np.newaxis], 3, axis=-1)
-# mask_img *= 255 
-# save_image("mask.jpg", 255 * mask_img)
+mask = img.mask.astype('uint8')
+mask_img = np.repeat(mask[..., np.newaxis], 4, axis=-1)
+mask_img *= 255 
+mask_img[..., -1] = 255
+save_image("mask.png", mask_img)
 
 # test out the Eye object using the same eye image
 PIXEL_SIZE = (488.84896*2)**-1  # mm
-eye = Eye("./002.jpg", mask_fn="./002/mask.jpg", pixel_size=PIXEL_SIZE)
+eye = Eye("./002.jpg", mask_fn="./mask.png", pixel_size=PIXEL_SIZE)
 eye.load_memmap()
 eye.get_eye_outline()
 eye.get_eye_dimensions(display=False)
