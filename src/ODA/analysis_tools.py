@@ -1576,7 +1576,7 @@ class Eye(Layer):
             if not bright_peak:
                 smooth_surface = smooth_surface.max() - smooth_surface
             self.ommatidial_inds = peak_local_max(smooth_surface,
-              min_distance=(int(round(dist / 4))), exclude_border=False,
+              min_distance=(int(round(dist / 4))), exclude_border=True,
               threshold_abs=1)
             ys, xs = self.ommatidial_inds.T
             self.ommatidial_inds = self.ommatidial_inds[self.mask[(ys, xs)]]
