@@ -666,13 +666,13 @@ class tracker_window():
         # the vmin slider
         vminframe = plt.axes([fig_left + fig_width + .02, 0.1, .02, .05 + .7])
         self.vmin = Slider(
-            vminframe, 'min', 0, self.vmax_possible,
-            valinit=0, valfmt='%d', color='k', orientation='vertical')
+            vminframe, 'min', 1, self.vmax_possible,
+            valinit=1, valfmt='%d', color='k', orientation='vertical')
         self.vmin.on_changed(self.show_image)
         # the vmax slider
         vmaxframe = plt.axes([fig_left + fig_width + .1, 0.1, .02, .05 + .7])
         self.vmax = Slider(
-            vmaxframe, 'max', 0, self.vmax_possible, valinit=self.vmax_possible,
+            vmaxframe, 'max', 1, self.vmax_possible, valinit=self.vmax_possible,
             valfmt='%d', color='k', orientation='vertical')
         self.vmax.on_changed(self.show_image)
         # limit both sliders
