@@ -667,24 +667,25 @@ def linear_cmap(vals, cmap='viridis', vmin=0, vmax=None):
     return cmap(vals)
 
 
-# folder = 'H:\\My Drive\\backup\\Desktop\\research\\method__compound_eye_tools\\benchmark_3D_data\\manduca_sexta\\_prefiltered_stack\\'
-# raw_folder = 'H:\\My Drive\\backup\\Desktop\\research\\method__compound_eye_tools\\benchmark_3D_data\\manduca_sexta\\'
-# pixel_length = 4.50074
-# zoffset = 762
-folder = 'H:\\My Drive\\backup\\Desktop\\research\\method__compound_eye_tools\\benchmark_3D_data\\drosophila_mauritiana\\_prefiltered_stack\\'
-raw_folder = 'H:\\My Drive\\backup\\Desktop\\research\\method__compound_eye_tools\\benchmark_3D_data\\drosophila_mauritiana\\'
-pixel_length = 4 * .325
-zoffset = 0
-#window_length = np.pi/3
-#polar_clustering = True
-#stack = CTStack(dirname=folder, img_extension='.tif', bw=True,
-#                pixel_size=pixel_length, depth_size=pixel_length)
-#stack.ommatidia_detecting_algorithm(neighborhood_smoothing=5, window_length=window_length,
-#                                    polar_clustering=polar_clustering, prefiltered=True, stage=0)
-pg.setConfigOptions(antialias=True)
+if __name__ == "__main__":
+    # folder = 'H:\\My Drive\\backup\\Desktop\\research\\method__compound_eye_tools\\benchmark_3D_data\\manduca_sexta\\_prefiltered_stack\\'
+    # raw_folder = 'H:\\My Drive\\backup\\Desktop\\research\\method__compound_eye_tools\\benchmark_3D_data\\manduca_sexta\\'
+    # pixel_length = 4.50074
+    # zoffset = 762
+    folder = 'd_mauritiana_ct_stack'
+    raw_folder = 'd_mauritiana_ct_stack'
+    pixel_length = 4 * .325
+    zoffset = 0
+    #window_length = np.pi/3
+    #polar_clustering = True
+    #stack = CTStack(dirname=folder, img_extension='.tif', bw=True,
+    #                pixel_size=pixel_length, depth_size=pixel_length)
+    #stack.ommatidia_detecting_algorithm(neighborhood_smoothing=5, window_length=window_length,
+    #                                    polar_clustering=polar_clustering, prefiltered=True, stage=0)
+    pg.setConfigOptions(antialias=True)
 
-gui = VolumeGUI(raw_stack_folder=raw_folder, dirname=folder, img_extension='.tif', bw=True,
-                pixel_size=pixel_length, depth_size=pixel_length, zoffset=zoffset,
-                bin_length=4, raw_bin_length=4)
+    gui = VolumeGUI(raw_stack_folder=raw_folder, dirname=folder, img_extension='.tif', bw=True,
+                    pixel_size=pixel_length, depth_size=pixel_length, zoffset=zoffset,
+                    bin_length=1, raw_bin_length=1)
 
-# todo: test: make sure everything still works for the raw and prefiltered stacks 
+    # todo: test: make sure everything still works for the raw and prefiltered stacks 
