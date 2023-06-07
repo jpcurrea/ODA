@@ -31,7 +31,10 @@ rgb_2_gray(rgb) : np.ndarray
 """
 from functools import partial
 import h5py
+# when running from pip install:
 from .interfaces import *
+# when runnning locally:
+# from interfaces import *
 import math
 import matplotlib
 from matplotlib import colors, mlab
@@ -71,6 +74,7 @@ blue, green, yellow, orange, red, purple = [
 if 'app' not in globals():
     app = QApplication([])
 
+
 def print_progress(part, whole):
     import sys
     prop = float(part) / float(whole)
@@ -78,8 +82,6 @@ def print_progress(part, whole):
     sys.stdout.write('[%-20s] %d%%' % ('=' * int(20 * prop), 100 * prop))
     sys.stdout.flush()
 
-for n in range(100):
-    print_progress(n, 100)
 
 def load_image(fn):
     """Import an image as a numpy array using the PIL."""
@@ -794,7 +796,7 @@ class Points:
             self.residuals = self.radii - self.radius
 
     def rasterize(self, polar=True, axes=[0, 1], image_size=10000, weights=None,
-                  pixel_length=None):
+                  pixel_length=None, project=False):
         """Rasterize coordinates onto a grid defined by min and max vals.
 
         Parameters
@@ -808,6 +810,8 @@ class Points:
         pixel_length : float, default=None
             Alternative method of specifying the grid based on the pixel length, as 
             opposed to image size. This overrides the image size.
+        project : bool, default=False
+            Whether to project the points onto the fitted surface in a non-linear way.
 
         Returns
         -------
@@ -842,6 +846,58 @@ class Points:
         ys = ys[:-1] + self.raster_pixel_length / 2.0
         self.xvals, self.yvals = xs, ys
         return (self.raster, (xs, ys))
+
+    def surface_projection(self, image_size=10000):
+        """Rasterize coordinates onto a grid defined by min and max vals.
+
+        Parameters
+        ----------
+        image_size : int, default=1e4
+            The number of pixels in the image.
+
+        Returns
+        -------
+        raster : np.ndarray
+            The 2D histogram of the points, optionally weighted by self.vals.
+        (xs, ys) : tuple
+            The x and y coordinates marking the boundaries of each pixel. 
+            Useful for rendering as a pyplot.pcolormesh.
+        """
+        # 1. fit a surface to the points in polar coordinates, approximating radius
+        # as the average radius of points within a cell of a grid
+        self.fit_surface(polar=True, image_size=1e6)
+        # 2. convert surface to recangular coordinates
+        surface = spherical_to_rectangular(self.avg)
+        theta, phi, radii = self.avg.T
+        # 3. for each point, find the nearest point on the surface
+        # each projection point should have the 
+        dist_tree = spatial.KDTree(surface)
+        dists, inds = dist_tree.query(self.pts) # inds point to the nearest points in surface
+        proj_radii = radii[inds]
+        dists[self.radii < proj_radii] *= -1
+        # todo: try using linear interpolation 
+        # breakpoint()
+        interp = interpolate.LinearNDInterpolator(
+            surface[:, :2], surface[:, 2])
+        surface_model = interp(self.pts[:, 0], self.pts[:, 1])
+
+        self.surface
+        # no_nans = np.isnan(cubic_surface) == False
+        # self.surface[sort_inds][no_nans] = cubic_surface[no_nans]
+        
+
+        # make projected coordinates using the polar angles of the surface points
+        # nearest each element
+        proj_theta, proj_phi = theta[inds], phi[inds]
+        proj_coords = np.array([proj_theta, proj_phi, dists]).T
+        fig, axes = plt.subplots(ncols=2, sharex=True, sharey=True)
+        axes[0].scatter(proj_theta, proj_phi, c=dists, marker='.', edgecolor='none',
+                        alpha=.1)
+        axes[1].scatter(self.theta, self.phi, c=self.radii - self.radii.mean(),
+                        marker='.', edgecolor='none', alpha=.1)
+        [ax.set_aspect('equal') for ax in axes]
+        plt.show()
+
 
     def fit_surface(self, polar=True, outcome_axis=0, image_size=10000.0):
         """Cubic interpolate surface of one axis using the other two.
@@ -1086,10 +1142,10 @@ class Layer:
             if (self.image[..., 0] == self.image.mean(-1)).mean() == 1:
                 self.image = self.image[(..., 0)]
                 self.bw = True
-        if self.bw:
-            self.image_bw = self.image.astype('uint8')
-        else:
+        if self.image.ndim == 3:
             self.image_bw = rgb_2_gray(self.image.astype('uint8'))
+        elif self.image.ndim == 2:
+            self.image_bw = self.image.astype('uint8')
         return self.image
 
     def load_memmap(self, filename=None):
@@ -1226,6 +1282,21 @@ class Eye(Layer):
             The path to the sillhouetting mask image file.
         mask : array_like, default = None
             Boolean masking image with the same shape as the input image array.
+
+        Methods
+        -------
+        get_eye_outline
+            Get the outline of the eye based on an eye mask.
+        get_eye_dimensions
+            Assuming an elliptical eye, get its length, width, and area.
+        crop_eye
+            Crop the image so that the frame is filled by the eye with padding.
+        get_ommatidia
+            Detect ommatidia coordinates assuming hex or square lattice.
+        measure_ommatidia
+            Measure ommatidial diameter using the ommatidia coordinates.
+        ommatidia_detecting_algorithm
+            The complete algorithm for measuring ommatidia in images.
         """
         Layer.__init__(self, filename=filename, arr=arr, bw=bw)
         self.eye_contour = None
@@ -1505,7 +1576,7 @@ class Eye(Layer):
             if not bright_peak:
                 smooth_surface = smooth_surface.max() - smooth_surface
             self.ommatidial_inds = peak_local_max(smooth_surface,
-              min_distance=(int(round(dist / 4))), exclude_border=False,
+              min_distance=(int(round(dist / 4))), exclude_border=True,
               threshold_abs=1)
             ys, xs = self.ommatidial_inds.T
             self.ommatidial_inds = self.ommatidial_inds[self.mask[(ys, xs)]]
@@ -1711,7 +1782,10 @@ class Stack:
         self.pixel_size = pixel_size
         self.depth_size = depth_size
         self.fns = os.listdir(self.dirname)
-        self.fns = sorted([os.path.join(self.dirname, f) for f in self.fns])
+        try:
+            self.fns = sorted([os.path.join(self.dirname, f) for f in self.fns])
+        except:
+            breakpoint()
         self.fns = [f for f in self.fns if f.endswith(img_extension)]
         self.layers = []
         self.bw = bw
@@ -1906,10 +1980,7 @@ class EyeStack(Stack):
     def crop_eyes(self):
         """Crop each layer."""
         assert len(self.layers) > 0, f"No layers loaded yet. Try running {self.load}."
-        try:
-            self.load_masks(mask_fn=(self.eye_mask_fn), mask_arr=(self.eye_mask))
-        except:
-            breakpoint()
+        self.load_masks(mask_fn=(self.eye_mask_fn), mask_arr=(self.eye_mask))
         new_layers = []
         for layer in self.layers:
             new_layers += [layer.crop_eye()]
@@ -1991,6 +2062,9 @@ class EyeStack(Stack):
             their diameters.
         use_memmaps : bool, default=False
             Whether to use memory maps instead of loading the images to RAM.
+        manual_edit : bool, default=False
+            Whether to use a GUI to edit the results of the ODA.
+
 
         Attributes
         ----------
@@ -2019,7 +2093,6 @@ class EyeStack(Stack):
         io_angle_fft : float, rad
             The average approximate inter-ommatidial angle using
             eye.ommatidial_diameter_fft / self.sphere.radius
-        manual_edit : bool, default=
         """
         if use_memmaps:
             self.load_memmaps()
@@ -2087,6 +2160,57 @@ class CTStack(Stack):
         ----------
         database_fn : str, default="_compoint_eye_data.h5"
             The filename of the H5 database with loaded values.
+        dirname : str
+            Path to the directory containing the images to load.
+        img_extension : str
+            The file extension of the images to load.
+        bw : bool
+            Whether the images are greyscale.
+        pixel_size : float, default=1
+            Actual length of the side of a pixel.
+        depth_size : float, default=1
+            Actual depth interval between individual layers.
+
+        Attributes
+        ----------
+        layers : list
+            The list of image layers.
+        layer_class : Layer, Eye
+            The class to use for each layer.
+        img_extension : str
+            The file extension to use for importing images.
+        fns : list
+            The list of filenames included in the Stack.
+
+        Methods
+        -------
+        __del__
+        load_database
+            Initialize and load the H5 database.
+        close_database
+            Delete the H5PY database.
+        save_database
+            Save the H5PY database by closing and reopening it.
+        prefilter
+            Filter the layers and then save in a new folder.
+        import_stack
+            Filter the images including values between low and high.
+        get_cross_sections
+            Approximate surface splitting the inner and outer sections.
+        find_ommatidial_clusters
+            2D running window applying ODA to spherical projections.
+        measure_ommatidia
+            Take measurements of ommatidia using the ommatidial clusters.
+        measure_interommatidia
+            Use the anatomical axes to quickly measure interommatidial angles.
+        plot_raw_data, plot_cross_section, plot_ommatidial_clusters, 
+        plot_ommatidial_data, plot_ommatidial_data_3d, plot_interommatidial_data,
+        plot_interommatidial_data_3d, plot_data_3d 
+            Convenient functions for plotting the corresponding data.
+        ommatidia_detecting_algorithm
+            Apply the 3D ommatidia detecting algorithm (ODA-3D).
+        stats_summary
+            Calculate important statistics for whatever data is available.
         """
         (Stack.__init__)(self, **kwargs)
         self.oda = self.ommatidia_detecting_algorithm
@@ -2094,8 +2218,8 @@ class CTStack(Stack):
         self.load_database()
 
     def __del__(self):
-        self.save_database()
-        self.database.close()
+        # when deleting the object, make sure to close the database
+        self.close_database()
 
     def load_database(self, mode='r+'):
         """Initialize and load the H5 database.
@@ -2105,50 +2229,68 @@ class CTStack(Stack):
         mode : str, default='r+'
             The access privileges of the database.
         """
+        # make temporary file if it doesn't exist yet
         if not os.path.exists(self.database_fn):
             new_database = h5py.File(self.database_fn, 'w')
             new_database.close()
+        # try openning the file
         try:
             self.database = h5py.File(self.database_fn, mode)
+        # if it fails to open, delete the file and make a new one
         except:
             os.remove(self.database_fn)
             new_database = h5py.File(self.database_fn, 'w')
             new_database.close()
             self.database = h5py.File(self.database_fn, mode)
-        first_layer = Layer(self.fns[0])
-        first_layer.load()
-        self.dtype = first_layer.image.dtype
+        # load the first layer to get important size and dtype information
+        if len(self.fns) > 0:
+            first_layer = Layer(self.fns[0])
+            first_layer.load()
+            self.dtype = first_layer.image.dtype
+        # store the databases as attributes to the current class
         for key in self.database.keys():
             setattr(self, key, self.database[key])
+        # same for attributes
+        for key in self.database.attrs.keys():
+            setattr(self, key, self.database.attrs[key])
         files_to_load = [
             os.path.join(self.dirname, 'ommatidial_data.pkl'),
             os.path.join(self.dirname, 'interommatidial_data.pkl')]
         for var, fn in zip(['ommatidial_data', 'interommatidial_data'],
                            files_to_load):
-            try:
-                if var in dir(self):
-                    delattr(self, var)
-                if os.path.exists(fn):
+            csv_fn = fn.replace(".pkl", ".csv")
+            if var in dir(self):
+                delattr(self, var)
+            if os.path.exists(fn):
+                try:
                     setattr(self, var, pd.read_pickle(fn))
+                except:
+                    if os.path.exists(csv_fn):
+                        setattr(self, var, pd.read_csv(csv_fn))
+                    else:
+                        print(f"failed to load {var}")
+
+    def close_database(self):
+        """Delete the H5PY database."""
+        if 'database' in dir(self):
+            try:
+                self.database.close()
             except:
-                print(f"failed to load {var}")
+                # make a temporary copy of this database
+                temp_fn = "temp_database.h5"
+                with h5py.File(temp_fn, 'w') as database_copy:
+                    for key in self.database.keys():
+                        dataset = self.database[key][:]
+                        database_copy.create_dataset(
+                            key, data=dataset, dtype=dataset.dtype)
+                # now delete the old database
+                del self.database
+                os.remove(self.database_fn)
+                os.rename(temp_fn, self.database_fn)
 
     def save_database(self):
-        """Save the H5PY database."""
-        try:
-            self.database.close()
-        except:
-            # make a temporary copy of this database
-            temp_fn = "temp_database.h5"
-            with h5py.File(temp_fn, 'w') as database_copy:
-                for key in self.database.keys():
-                    dataset = self.database[key][:]
-                    database_copy.create_dataset(
-                        key, data=dataset, dtype=dataset.dtype)
-            # now delete the old database
-            del self.database
-            os.remove(self.database_fn)
-            os.rename(temp_fn, self.database_fn)
+        """Save the H5PY database by closing and reopening it."""
+        self.close_database()
         self.load_database()
 
     def prefilter(self, low=0, high=None, folder='_prefiltered_stack', gui=False):
@@ -2201,24 +2343,21 @@ class CTStack(Stack):
             The maximum value for an inclusing filter, defaulting to 
             the maximum.
         """
-        if 'points' in dir(self):
-            del self.points
-            if 'points' in self.database:
-                del self.database['points']
-        self.points = self.database.create_dataset(
-            'points', data=(np.zeros((1000, 3))), dtype=float,
-            chunks=(1000, 3), maxshape=(None, 3))
-        self.points_subset = self.database.create_dataset(
-            'points_subset', data=(np.zeros((0, 3))), dtype=float,
-            chunks=(1000, 3), maxshape=(None, 3))
+        for lbl in ['points', 'points_original', 'points_subset']:
+            if lbl in dir(self):
+                delattr(self, lbl)
+            if lbl in self.database:
+                del self.database[lbl]
+            dataset = self.database.create_dataset(
+                lbl, data=(np.zeros((0, 3))), dtype=float,
+                chunks=(1000, 3), maxshape=(None, 3))
+            self.__setattr__(lbl, dataset)
         first_layer = Layer(self.fns[0])
         dirname, basename = os.path.split(first_layer.filename)
         if high is None:
             first_layer.load()
             dtype = first_layer.image.dtype
             high = np.iinfo(dtype).max
-        if self.points.shape[0] > 0:
-            self.points.resize(0, axis=0)
         print("Importing stack layer by layer:")
         for num, layer in enumerate(self.iter_layers()):
             layer.load()
@@ -2226,13 +2365,14 @@ class CTStack(Stack):
             if np.any(include):
                 x, y = np.where(include)
                 pts = np.array([
-                 np.repeat(
-                     float(num) * self.depth_size, len(x)),
+                    np.repeat(float(num) * self.depth_size, len(x)),
                     self.pixel_size * x.astype(float),
                     self.pixel_size * y.astype(float)]).T
-                self.points.resize((
-                    self.points.shape[0] + len(x), 3))
-                self.points[-len(x):] = pts
+                # store two copies of the points dataset
+                for dataset in [self.points, self.points_original]:
+                    dataset.resize((
+                        dataset.shape[0] + len(x), 3))
+                    dataset[-len(x):] = pts
                 num_points = len(x)
                 sample = math.ceil(0.01 * num_points)
                 inds = np.random.choice((np.arange(num_points)),
@@ -2268,6 +2408,8 @@ class CTStack(Stack):
         """
         assert self.points.shape[0] > 0, ("No points have been loaded. Try running"+
                                           f" {self.import_stack} first.")
+        if not np.all(self.points[:] == self.points_original[:]):
+            self.points[:] = self.points_original[:]
         ind_range = range(len(self.points))
         num_samples = min(len(self.points), 1000000)
         inds = np.random.choice(ind_range, size=num_samples, replace=False)
@@ -2285,11 +2427,32 @@ class CTStack(Stack):
         sphere = SphereFit(subset)
         center = sphere.center
         self.center = center
+        # center self.points using the sphere's center and rotate so that the 
+        # center of the visual field is centered
+        # keep track of the translation and rotation applied to the coordinates
+        self.sphere_center = self.center
+        # self.rot_matrix1 /= np.linalg.norm(self.rot_matrix1)
         pts = self.points[:]
         pts = pts - self.center[np.newaxis]
+        # rotate the points
         pts = rotate(pts, (sphere.rot_ang1), axis=0).T
         pts = rotate(pts, (sphere.rot_ang2), axis=2).T
         self.points[:] = pts
+        # breakpoint()
+        # keep track of the rotation by rotating the standard basis by the same amount
+        # self.basis1 = np.eye(3)
+        # self.basis1 = rotate(self.basis1, (sphere.rot_ang1), axis=0).T
+        # self.basis1 = rotate(self.basis1, (sphere.rot_ang2), axis=2).T
+        # test: check that we can use basis1 to rotate the original coordinates
+        # sub_pts = np.copy(self.points[1000:1100])
+        # sub_pts = np.dot(self.basis1, sub_pts.T).T
+        # sub_pts += self.sphere_center
+        # sub_pts_og = np.copy(self.points_original[1000:1100])
+        # diff = sub_pts - sub_pts_og
+        # store the two angles
+        for lbl, val in zip(['center', 'rot1', 'rot2'], [sphere.center, sphere.rot_ang1, sphere.rot_ang2]):
+            self.database.attrs[lbl] = val
+        self.save_database()
         subset -= center[np.newaxis, :]
         # pts.surface_predict(image_size=10000)
         self.shell = pts
@@ -2355,7 +2518,7 @@ class CTStack(Stack):
     def find_ommatidial_clusters(self, polar_clustering=True, window_length=np.pi / 6,
                                  window_pad=np.pi / 20, image_size=10000, mask_blur_std=2,
                                  square_lattice=False, test=False, regular=True,
-                                 manual_edit=False):
+                                 manual_edit=False, thickness=.5):
         """2D running window applying ODA to spherical projections.
 
         
@@ -2383,6 +2546,9 @@ class CTStack(Stack):
         manual_edit : bool, default=False
             Whether to allow the user to manually edit the ommatidial 
             coordinates per segment.
+        thickness : float, default=.5
+            The proportion of the residuals used for generating the 
+            eye raster for running the ODA.
 
         Attributes
         ----------
@@ -2444,7 +2610,10 @@ class CTStack(Stack):
         # iterate through the windows +/- padding
         max_val = 0
         segment_number = 1
-        low, high = np.percentile(self.residual[:], [25, 75])
+        # low, high = np.percentile(self.residual[:], [25, 75])
+        thickness_padding = 100 * ((1 - thickness) / 2)
+        lower_b, upper_b = thickness_padding, 100 - thickness_padding
+        low, high = np.percentile(self.residual[:], [lower_b, upper_b])
         in_cross_section = (self.residual[:] > low) * (self.residual[:] < high)
         print('Processing the polar coordinates in segments:')
         while theta_low <= theta_max:
@@ -2490,208 +2659,211 @@ class CTStack(Stack):
                     subset_original = np.concatenate(subset)
                     subset = np.copy(subset_original)
                     in_shell = np.concatenate(in_shell)
-                    # rotate points so that center of mass is ideal for spherical coordinates
-                    com = subset.mean(0)
-                    com_polar = rectangular_to_spherical(com[np.newaxis])
-                    theta_displacement, phi_displacement, _ = com_polar[0]
-                    subset = rotate(subset, phi_center, axis=2).T
-                    subset = rotate(subset, (theta_center - np.pi / 2), axis=1).T
-                    polar = rectangular_to_spherical(subset)
-                    # get the now centered polar coordinates
-                    segment = Points(subset, sphere_fit=False, rotate_com=False,
-                                     spherical_conversion=False, polar=polar)
-                    sub_segment = Points((subset[in_shell]), sphere_fit=False, rotate_com=False,
+                    if sum(in_shell) > 10:
+                        # rotate points so that center of mass is ideal for spherical coordinates
+                        com = subset.mean(0)
+                        com_polar = rectangular_to_spherical(com[np.newaxis])
+                        theta_displacement, phi_displacement, _ = com_polar[0]
+                        subset = rotate(subset, phi_center, axis=2).T
+                        subset = rotate(subset, (theta_center - np.pi / 2), axis=1).T
+                        polar = rectangular_to_spherical(subset)
+                        # get the now centered polar coordinates
+                        segment = Points(subset, sphere_fit=False, rotate_com=False,
                                          spherical_conversion=False, polar=polar)
-                    # find the shortest distances to figure out the necessary pixel size
-                    # for our raster image
-                    dists_tree = spatial.KDTree(sub_segment.polar[:, :2])
-                    dists, inds = dists_tree.query((sub_segment.polar[:, :2]), k=2)
-                    min_dist = 2 * np.mean(dists[:, 1])
-                    raster, (theta_vals, phi_vals) = sub_segment.rasterize(
-                        image_size=image_size, pixel_length=min_dist)
-                    pixel_size = phi_vals[1] - phi_vals[0]
-                    # generate a boolean mask by smoothing the thresholded raster image
-                    mask = raster > 0
-                    mask = ndimage.gaussian_filter(mask.astype(float), 2)
-                    mask /= mask.max()
-                    thresh = 0.1
-                    mask = mask > thresh
-                    mask = 255 * mask.astype(int)
-                    raster = 255 * (raster / raster.max())
-                    raster = raster.astype('uint8')
-                    # use the ODA 2D to find ommatidial centers
-                    eye = Eye(arr=raster, pixel_size=pixel_size, mask_arr=mask,
-                              mask_fn=None)
-                    eye.oda(plot=False, square_lattice=False, bright_peak=True,
-                            regular=regular, manual_edit=manual_edit)
-                    centers = eye.ommatidia
-                    # TODO: fix bug resulting in one HUGE segment of points. this is compressing
-                    # the raster image or warping it due to the curvature and affecting the ODA.
-                    # Basically, make sure that the segments are evenly partitioned
-                    # if we found a reasonable number of ommatidia,
-                    if len(centers) < len(subset) and len(centers) > 0:
-                        # uncenter their center coordinates
-                        centers += [theta_vals.min(), phi_vals.min()]
-                        segment.surface_predict(xvals=(centers[:, 0]),
-                                                yvals=(centers[:, 1]))
-                        model_radii = segment.surface
-                        # use model radii
-                        centers = np.array([
-                            centers[:, 0], centers[:, 1], model_radii]).T
-                        if polar_clustering:
-                            # use the 2d projection
-                            no_nans = np.any((np.isnan(centers)), axis=1) == False
-                            centers = centers[no_nans]
-                            # use KDTree to to find points nearest the centers
-                            dist_tree = spatial.KDTree(centers[:, :2])
-                            dists, lbls = dist_tree.query(polar[:, :2])
-                            lbls += 1
-                        else:
-                            # use 3d coordinates
-                            no_nans = np.isnan(centers[:, -1]) == False
-                            centers = centers[no_nans]
-                            centers_rect = spherical_to_rectangular(centers)
-                            dist_tree_centers = spatial.KDTree(centers_rect)
-                            dist_tree_pts = spatial.KDTree(subset)
-                            dists, lbls = dist_tree_centers.query(subset)
-                            lbls += 1  # avoid 0, which is the default group
-                            # use 2 times the ommatidial diameter to include
-                            # neighboring clusters
-                            ommatidial_diam_angle = eye.ommatidial_diameter.mean()
-                            ommatidial_diam = ommatidial_diam_angle * self.radii[:].mean()
-                            radius = 2 * ommatidial_diam
-                            # measure how many pts have nearest neighbors in a different cluster
-                            # find nearest neighbors
-                            nearest_dists, nearest_neighbors = dist_tree_pts.query(subset, k=2)
-                            nearest_neighbors = nearest_neighbors[:, 1]
-                            # get labels of those neighbors
-                            neighbor_lbls = lbls[nearest_neighbors]
-                            # compare the two lists of labels and aggregate based on label
-                            different_neighbors = lbls != neighbor_lbls
-                            broken_pts = []
-                            for lbl in range(len(centers_rect)):
-                                subset_inds = lbls == lbl
-                                subset_broken = different_neighbors[subset_inds]
-                                broken_pts += [subset_broken.mean()]
-                            broken_pts = np.array(broken_pts)
-                            for lbl, (center, broken_prop) in enumerate(zip(
-                                    centers_rect, broken_pts)):
-                                if broken_prop > .1:
-                                    # 1. find nearby pts and cluster centers, recentering to the
-                                    # current center
-                                    nearby_centers = np.array(
-                                        dist_tree_centers.query_ball_point(
-                                            center, r=radius))
-                                    # wrong! I need to find the 
-                                    nearby_inds = np.where(np.in1d(lbls-1, nearby_centers))[0]
-                                    pts_nearby = subset[nearby_inds]
-                                    lbls_nearby = lbls[nearby_inds]
-                                    # center pts
-                                    pts_center = pts_nearby.mean(0)
-                                    pts_nearby -= pts_center
-                                    # center centers
-                                    centers_nearby = centers_rect[nearby_centers]
-                                    centers_nearby -= pts_center
-                                    # 2. apply Gaussian Mixture clustering to find individual clusters
-                                    # test: can we orient the clusters using SVD, since the
-                                    # SVD doesn't really work on more skewed ommaitidia, but
-                                    # can work as a starting point for the rotation fitting
-                                    # variability should be lowest along the longitudinal axis
-                                    uu, ss, vv = np.linalg.svd(pts_nearby)
-                                    uu_c, ss_c, vv_c = np.linalg.svd(centers_nearby)
-                                    # rotate using the new basis vectors
-                                    pts_nearby_rotated = np.dot(pts_nearby, vv.T)
-                                    centers_nearby_rotated = np.dot(centers_nearby, vv.T)
-                                    # test: plot the projected points to see if this worked
-                                        # x, y, z = pts_nearby_rotated.T
-                                        # fig = plt.figure()
-                                        # # ax = fig.add_subplot(111, projection='3d')
-                                        # # ax.scatter(x, y, z)
-                                        # ax = fig.add_subplot(121)
-                                        # ax.scatter(x, y, alpha=.25)
-                                        # ax.set_aspect('equal')
-                                        # # plot the old orientation
-                                        # ax = fig.add_subplot(122)
-                                        # ax.scatter(pts_nearby[:, 0], pts_nearby[:, 1], alpha=.25)
-                                        # # plot in 3d
-                                        # fig = plt.figure()
-                                        # ax = fig.add_subplot(111, projection='3d',
-                                        #                      proj_type='ortho')
-                                        # ax.scatter(x, y, z)
-                                        # plt.show()
-                                    # test: use RotateClusterer with +/- 60 degrees from the
-                                    # rotated points. SUCCESS!!!
-                                    clusterer = RotateClusterer(pts_nearby_rotated,
-                                                                centers_nearby_rotated)
-                                    new_lbls = clusterer.lbls
-                                    new_lbls_set = np.unique(new_lbls)
-                                    # 3. get all points with the lbl closest to 0
-                                    # centers_new = clusterer.means_
-                                    centers_new = []
-                                    for new_lbl in set(new_lbls):
-                                        sub_pts = pts_nearby[new_lbls == new_lbl]
-                                        centers_new += [sub_pts.mean(0)]
-                                    centers_new = np.array(centers_new)
-                                    center_dists = np.linalg.norm(centers_new, axis=-1)
-                                    new_lbl_nearest = np.argmin(center_dists)  # closest new center
-                                    # use linear sum sorting to find new label closest to old label
-                                    diffs = centers_new[np.newaxis] - centers_nearby[:, np.newaxis]
-                                    dists = np.linalg.norm(diffs, axis=-1)
-                                    row_inds, col_inds = optimize.linear_sum_assignment(
-                                        dists)
-                                    center_ind = np.where(nearby_centers == lbl)[0][0]
-                                    # test: an index error came up. i may have switched rows with
-                                    # columns. if I reach this breakpoint, there's a bigger
-                                    # problem
-                                    if center_ind in row_inds:
-                                        new_lbl_nearest = new_lbls_set[row_inds == center_ind][0]
-                                        # new_lbl_nearest = new_lbls[center_nearest]
-                                        pts_nearest = pts_nearby[new_lbls == new_lbl_nearest]
-                                        pts_nearest_uncentered = pts_nearest + pts_center
-                                        # 4. get indices of those points in self.points
-                                        # measure number of broken elements
-                                        dist_tree_pts_new = spatial.KDTree(pts_nearby)
-                                        dists, inds = dist_tree_pts_new.query(
-                                            pts_nearest, k=2)
-                                        lbl_pairs = new_lbls[inds].T
-                                        broken_pts = lbl_pairs[0] != lbl_pairs[1]
-                                        broken_prop_new = broken_pts.mean()
-                                        # only accept new labels if it produces less broken
-                                        # elements
-                                        if broken_prop_new < .05:
-                                            inds_original = lbls == lbl
-                                            inds_new = nearby_inds[new_lbls == new_lbl_nearest]
-                                            # 5. replace the lbl value associated with those
-                                            # points
-                                            # with the current label
-                                            lbls[inds_original] = -1
-                                            lbls[inds_new] = lbl
-                                    # test: plot with the original
-                                    if test:
-                                        fig = plt.figure()
-                                        # plot the subset colorcoded by old labels, highlight main
-                                        # cluster
-                                        ax = fig.add_subplot(121, projection='3d')
-                                        ax.scatter((pts_nearby[:, 0]), (pts_nearby[:, 1]),
-                                                   (pts_nearby[:, 2]), c=lbls_nearby,
-                                                   marker='.', cmap='tab20')
-                                        old_cluster = pts_nearby[lbls_nearby == lbl]
-                                        ax.scatter(old_cluster[:, 0], old_cluster[:, 1],
-                                                   old_cluster[:, 2], marker='o', color='k')
-                                        ax.scatter(centers_nearby[:, 0], centers_nearby[:, 1],
-                                                   centers_nearby[:, 2], marker='o', color='r')
-                                        ax.set_title(f"{np.round(100 * broken_prop, 2)}% outliers")
-                                        # plot the whole subset highlighting the new main cluster
-                                        ax = fig.add_subplot(122, projection='3d')
-                                        ax.scatter((pts_nearby[:, 0]), (pts_nearby[:, 1]),
-                                                   (pts_nearby[:, 2]), c=new_lbls,
-                                                   marker='.', cmap='tab20')
-                                        ax.scatter(pts_nearest[:, 0], pts_nearest[:, 1],
-                                                   pts_nearest[:, 2], marker='o', color='k')
-                                        ax.scatter(centers_new[:, 0], centers_new[:, 1],
-                                                   centers_new[:, 2], marker='o', color='r')
-                                        ax.set_title(f"{np.round(100 * broken_prop_new, 2)}% outliers")
-                                        plt.show()
+                        # segment.surface_projection()
+                        sub_segment = Points((subset[in_shell]), sphere_fit=False, rotate_com=False,
+                                             spherical_conversion=False, polar=polar[in_shell])
+                        # sub_segment.surface_projection(image_size=1e6)
+                        # find the shortest distances to figure out the necessary pixel size
+                        # for our raster image
+                        dists_tree = spatial.KDTree(sub_segment.polar[:, :2])
+                        dists, inds = dists_tree.query((sub_segment.polar[:, :2]), k=2)
+                        min_dist = 2 * np.mean(dists[:, 1])
+                        raster, (theta_vals, phi_vals) = sub_segment.rasterize(
+                            image_size=image_size, pixel_length=min_dist)
+                        pixel_size = phi_vals[1] - phi_vals[0]
+                        # generate a boolean mask by smoothing the thresholded raster image
+                        mask = raster > 0
+                        mask = ndimage.gaussian_filter(mask.astype(float), 2)
+                        mask /= mask.max()
+                        thresh = 0.1
+                        mask = mask > thresh
+                        mask = 255 * mask.astype(int)
+                        raster = 255 * (raster / raster.max())
+                        raster = raster.astype('uint8')
+                        # use the ODA 2D to find ommatidial centers
+                        eye = Eye(arr=raster, pixel_size=pixel_size, mask_arr=mask,
+                                  mask_fn=None)
+                        eye.oda(plot=False, square_lattice=False, bright_peak=True,
+                                regular=regular, manual_edit=manual_edit)
+                        centers = eye.ommatidia
+                        # TODO: fix bug resulting in one HUGE segment of points. this is compressing
+                        # the raster image or warping it due to the curvature and affecting the ODA.
+                        # Basically, make sure that the segments are evenly partitioned
+                        # if we found a reasonable number of ommatidia,
+                        if len(centers) < len(subset) and len(centers) > 0:
+                            # uncenter their center coordinates
+                            centers += [theta_vals.min(), phi_vals.min()]
+                            segment.surface_predict(xvals=(centers[:, 0]),
+                                                    yvals=(centers[:, 1]))
+                            model_radii = segment.surface
+                            # use model radii
+                            centers = np.array([
+                                centers[:, 0], centers[:, 1], model_radii]).T
+                            if polar_clustering:
+                                # use the 2d projection
+                                no_nans = np.any((np.isnan(centers)), axis=1) == False
+                                centers = centers[no_nans]
+                                # use KDTree to to find points nearest the centers
+                                dist_tree = spatial.KDTree(centers[:, :2])
+                                dists, lbls = dist_tree.query(polar[:, :2])
+                                lbls += 1
+                            else:
+                                # use 3d coordinates
+                                no_nans = np.isnan(centers[:, -1]) == False
+                                centers = centers[no_nans]
+                                centers_rect = spherical_to_rectangular(centers)
+                                dist_tree_centers = spatial.KDTree(centers_rect)
+                                dist_tree_pts = spatial.KDTree(subset)
+                                dists, lbls = dist_tree_centers.query(subset)
+                                lbls += 1  # avoid 0, which is the default group
+                                # use 2 times the ommatidial diameter to include
+                                # neighboring clusters
+                                ommatidial_diam_angle = eye.ommatidial_diameter.mean()
+                                ommatidial_diam = ommatidial_diam_angle * self.radii[:].mean()
+                                radius = 2 * ommatidial_diam
+                                # measure how many pts have nearest neighbors in a different cluster
+                                # find nearest neighbors
+                                nearest_dists, nearest_neighbors = dist_tree_pts.query(subset, k=2)
+                                nearest_neighbors = nearest_neighbors[:, 1]
+                                # get labels of those neighbors
+                                neighbor_lbls = lbls[nearest_neighbors]
+                                # compare the two lists of labels and aggregate based on label
+                                different_neighbors = lbls != neighbor_lbls
+                                broken_pts = []
+                                for lbl in range(len(centers_rect)):
+                                    subset_inds = lbls == lbl
+                                    subset_broken = different_neighbors[subset_inds]
+                                    broken_pts += [subset_broken.mean()]
+                                broken_pts = np.array(broken_pts)
+                                for lbl, (center, broken_prop) in enumerate(zip(
+                                        centers_rect, broken_pts)):
+                                    if broken_prop > .1:
+                                        # 1. find nearby pts and cluster centers, recentering to the
+                                        # current center
+                                        nearby_centers = np.array(
+                                            dist_tree_centers.query_ball_point(
+                                                center, r=radius))
+                                        # wrong! I need to find the 
+                                        nearby_inds = np.where(np.in1d(lbls-1, nearby_centers))[0]
+                                        pts_nearby = subset[nearby_inds]
+                                        lbls_nearby = lbls[nearby_inds]
+                                        # center pts
+                                        pts_center = pts_nearby.mean(0)
+                                        pts_nearby -= pts_center
+                                        # center centers
+                                        centers_nearby = centers_rect[nearby_centers]
+                                        centers_nearby -= pts_center
+                                        # 2. apply Gaussian Mixture clustering to find individual clusters
+                                        # test: can we orient the clusters using SVD, since the
+                                        # SVD doesn't really work on more skewed ommaitidia, but
+                                        # can work as a starting point for the rotation fitting
+                                        # variability should be lowest along the longitudinal axis
+                                        uu, ss, vv = np.linalg.svd(pts_nearby)
+                                        uu_c, ss_c, vv_c = np.linalg.svd(centers_nearby)
+                                        # rotate using the new basis vectors
+                                        pts_nearby_rotated = np.dot(pts_nearby, vv.T)
+                                        centers_nearby_rotated = np.dot(centers_nearby, vv.T)
+                                        # test: plot the projected points to see if this worked
+                                            # x, y, z = pts_nearby_rotated.T
+                                            # fig = plt.figure()
+                                            # # ax = fig.add_subplot(111, projection='3d')
+                                            # # ax.scatter(x, y, z)
+                                            # ax = fig.add_subplot(121)
+                                            # ax.scatter(x, y, alpha=.25)
+                                            # ax.set_aspect('equal')
+                                            # # plot the old orientation
+                                            # ax = fig.add_subplot(122)
+                                            # ax.scatter(pts_nearby[:, 0], pts_nearby[:, 1], alpha=.25)
+                                            # # plot in 3d
+                                            # fig = plt.figure()
+                                            # ax = fig.add_subplot(111, projection='3d',
+                                            #                      proj_type='ortho')
+                                            # ax.scatter(x, y, z)
+                                            # plt.show()
+                                        # test: use RotateClusterer with +/- 60 degrees from the
+                                        # rotated points. SUCCESS!!!
+                                        clusterer = RotateClusterer(pts_nearby_rotated,
+                                                                    centers_nearby_rotated)
+                                        new_lbls = clusterer.lbls
+                                        new_lbls_set = np.unique(new_lbls)
+                                        # 3. get all points with the lbl closest to 0
+                                        # centers_new = clusterer.means_
+                                        centers_new = []
+                                        for new_lbl in set(new_lbls):
+                                            sub_pts = pts_nearby[new_lbls == new_lbl]
+                                            centers_new += [sub_pts.mean(0)]
+                                        centers_new = np.array(centers_new)
+                                        center_dists = np.linalg.norm(centers_new, axis=-1)
+                                        new_lbl_nearest = np.argmin(center_dists)  # closest new center
+                                        # use linear sum sorting to find new label closest to old label
+                                        diffs = centers_new[np.newaxis] - centers_nearby[:, np.newaxis]
+                                        dists = np.linalg.norm(diffs, axis=-1)
+                                        row_inds, col_inds = optimize.linear_sum_assignment(
+                                            dists)
+                                        center_ind = np.where(nearby_centers == lbl)[0][0]
+                                        # test: an index error came up. i may have switched rows with
+                                        # columns. if I reach this breakpoint, there's a bigger
+                                        # problem
+                                        if center_ind in row_inds:
+                                            new_lbl_nearest = new_lbls_set[row_inds == center_ind][0]
+                                            # new_lbl_nearest = new_lbls[center_nearest]
+                                            pts_nearest = pts_nearby[new_lbls == new_lbl_nearest]
+                                            pts_nearest_uncentered = pts_nearest + pts_center
+                                            # 4. get indices of those points in self.points
+                                            # measure number of broken elements
+                                            dist_tree_pts_new = spatial.KDTree(pts_nearby)
+                                            dists, inds = dist_tree_pts_new.query(
+                                                pts_nearest, k=2)
+                                            lbl_pairs = new_lbls[inds].T
+                                            broken_pts = lbl_pairs[0] != lbl_pairs[1]
+                                            broken_prop_new = broken_pts.mean()
+                                            # only accept new labels if it produces less broken
+                                            # elements
+                                            if broken_prop_new < .05:
+                                                inds_original = lbls == lbl
+                                                inds_new = nearby_inds[new_lbls == new_lbl_nearest]
+                                                # 5. replace the lbl value associated with those
+                                                # points
+                                                # with the current label
+                                                lbls[inds_original] = -1
+                                                lbls[inds_new] = lbl
+                                        # test: plot with the original
+                                        if test:
+                                            fig = plt.figure()
+                                            # plot the subset colorcoded by old labels, highlight main
+                                            # cluster
+                                            ax = fig.add_subplot(121, projection='3d')
+                                            ax.scatter((pts_nearby[:, 0]), (pts_nearby[:, 1]),
+                                                       (pts_nearby[:, 2]), c=lbls_nearby,
+                                                       marker='.', cmap='tab20')
+                                            old_cluster = pts_nearby[lbls_nearby == lbl]
+                                            ax.scatter(old_cluster[:, 0], old_cluster[:, 1],
+                                                       old_cluster[:, 2], marker='o', color='k')
+                                            ax.scatter(centers_nearby[:, 0], centers_nearby[:, 1],
+                                                       centers_nearby[:, 2], marker='o', color='r')
+                                            ax.set_title(f"{np.round(100 * broken_prop, 2)}% outliers")
+                                            # plot the whole subset highlighting the new main cluster
+                                            ax = fig.add_subplot(122, projection='3d')
+                                            ax.scatter((pts_nearby[:, 0]), (pts_nearby[:, 1]),
+                                                       (pts_nearby[:, 2]), c=new_lbls,
+                                                       marker='.', cmap='tab20')
+                                            ax.scatter(pts_nearest[:, 0], pts_nearest[:, 1],
+                                                       pts_nearest[:, 2], marker='o', color='k')
+                                            ax.scatter(centers_new[:, 0], centers_new[:, 1],
+                                                       centers_new[:, 2], marker='o', color='r')
+                                            ax.set_title(f"{np.round(100 * broken_prop_new, 2)}% outliers")
+                                            plt.show()
                                     print_progress(lbl, len(centers_rect))
                         # store the labels + previous maximum to avoid duplicates
                         # todo: use arbitrary labels and then replace with unique ones later
@@ -2952,15 +3124,19 @@ class CTStack(Stack):
                 position = np.array([xgrid.flatten(), ygrid.flatten()])
                 xlen, ylen = xvals[1] - xvals[0], yvals[1] - yvals[0]
                 pixel_area = xlen * ylen
-                # find 2D kernal density estimation 
-                kernal = stats.gaussian_kde(pts_rotated[:, 1:].T)
-                density = kernal(position).reshape((50, 50))
-                density /= density.max() # normalize to maximum
-                # get the area of the 50% density kernal
-                cross_sectional_area = (density > .5).sum() * pixel_area
-                # get the height using the first principle component
-                heights = pts_rotated[:, 0]
-                cross_sectional_height = heights.ptp()
+                try:
+                    # find 2D kernal density estimation 
+                    kernal = stats.gaussian_kde(pts_rotated[:, 1:].T)
+                    density = kernal(position).reshape((50, 50))
+                    density /= density.max() # normalize to maximum
+                    # get the area of the 50% density kernal
+                    cross_sectional_area = (density > .5).sum() * pixel_area
+                    # get the height using the first principle component
+                    heights = pts_rotated[:, 0]
+                    cross_sectional_height = heights.ptp()
+                except:
+                    cross_sectional_area = np.nan
+                    cross_sectional_height = np.nan
             else:
                 anatomical_vector = np.array([np.nan, np.nan, np.nan])
                 cross_sectional_area = np.nan
@@ -3019,8 +3195,11 @@ class CTStack(Stack):
                 # only go through each pair once
                 if all([pair not in pairs,
                         np.any(self.ommatidial_data.label.values == neighbor_ind)]):
-                    inds = np.where(self.ommatidial_data.label.values == neighbor_ind)[0][0]
-                    neighbor_cone = self.ommatidial_data.loc[inds]
+                    try:
+                        inds = np.where(self.ommatidial_data.label.values == neighbor_ind)[0][0]
+                        neighbor_cone = self.ommatidial_data.iloc[inds]
+                    except:
+                        breakpoint()
                     inds = np.where(cluster_lbls == neighbor_ind)[0]
                     theta1, phi1 = cone[['theta', 'phi']].values.T
                     x, y, z = cone[['x', 'y', 'z']]
@@ -3059,293 +3238,7 @@ class CTStack(Stack):
         dataset = self.database.create_dataset(
             var, data=pairs_tested)
 
-    def measure_interommatidia(self, square_lattice=False, test=False):
-        """Take measurements of all inter-ommatidial pairs and save.
-
-        Parameters
-        ----------
-        square_lattice : bool, default=False
-            Whether the ommatidial lattice is square vs. hexagonal.
-        test : bool, default=False
-            Whether to perform code blocks related to troubleshooting.
-        """
-        labels = self.ommatidial_data.neighbors.values
-        cluster_lbls = self.labels[:]
-        pair_centers = self.pair_centers[:]
-        pairs_tested = self.pairs_tested[:]
-        orientations = self.orientations[:]
-        centers_components = np.linalg.svd(pair_centers[::100] - pair_centers.mean(0))[2]
-        centers_rotated = np.dot(pair_centers - pair_centers.mean(0), centers_components)
-        rotated_eye = np.dot(self.points[:] - pair_centers.mean(0), centers_components)
-        rotated_origin = np.dot(np.array([[0, 0, 0]]) - pair_centers.mean(0), centers_components)
-        rotated_ranges = rotated_eye.max(0) - rotated_eye.min(0)
-        xind, yind, zind = np.argsort(rotated_ranges)[::-1]
-        xs, ys, zs = rotated_eye[:, [xind, yind, zind]].T
-        xs_pairs, ys_pairs, zs_pairs = centers_rotated[:, [xind, yind, zind]].T
-        cluster_centers = dict()
-        for lbl in set(cluster_lbls):
-            if lbl >= 0:
-                ind = np.where(cluster_lbls == lbl)[0]
-                cluster_centers[lbl] = rotated_eye[ind].mean(0)
-            xs_pair, ys_pair = pair_centers[:, :2].T
-            ys_vals = np.linspace(ys_pair.min(), ys_pair.max(), 41)
-            xs_vals = np.linspace(xs_pair.min(), xs_pair.max(), 41)
-            vertical_IOAs = np.zeros(pairs_tested.shape[0])
-            horizontal_IOAs = np.zeros(pairs_tested.shape[0])
-            vertical_IOA_residuals = np.zeros(pairs_tested.shape[0])
-            horizontal_IOA_residuals = np.zeros(pairs_tested.shape[0])
-            projected_coords = dict()
-
-        for lbl in self.ommatidial_data.label.values:
-            projected_coords[lbl] = np.zeros(3, float)
-            projected_coords[lbl].fill(np.nan)
-        else:
-            for arr in (
-             vertical_IOAs, horizontal_IOAs,
-             vertical_IOA_residuals, horizontal_IOA_residuals):
-                arr.fill(np.nan)
-            else:
-                num = 0
-                for var_vals, var_IOAs, var_IOA_resids, var_pairs, other_pairs, var_ind, other_ind, var_lbl in zip([
-                 ys_vals, xs_vals], [
-                 vertical_IOAs, horizontal_IOAs], [
-                 vertical_IOA_residuals, horizontal_IOA_residuals], [
-                 ys_pair, xs_pair], [
-                 xs_pair, ys_pair], [
-                 yind, xind], [
-                 xind, yind], [
-                 'Y-axis', 'X-axis']):
-                    for var_start, var_stop in zip(var_vals[:-1], var_vals[1:]):
-                        in_slice = (var_pairs >= var_start) * (var_pairs < var_stop)
-                        pairs_in_slice = pairs_tested[in_slice].astype(int)
-                        pairs_in_slice_set = sorted(set(pairs_in_slice.flatten()))
-                        pts_inds = np.in1d(cluster_lbls, pairs_in_slice_set)
-                        pts_inds = np.where(pts_inds)[0]
-                        pts_in_slice = self.points[pts_inds]
-                        lbls_in_slice = cluster_lbls[pts_inds]
-                        if test:
-                            colorvals = np.arange(max(set(lbls_in_slice)))
-                            np.random.shuffle(colorvals)
-                            color_conv = dict()
-                            for lbl, clbl in zip(sorted(set(lbls_in_slice)), colorvals):
-                                color_conv[lbl] = clbl
-                            else:
-                                clbls = []
-                                for lbl in lbls_in_slice:
-                                    clbls += [color_conv[lbl]]
-                                else:
-                                    clbls = np.array(clbls)
-
-                        lbls_set, rays, residuals = angle_fitter(pts=(pts_in_slice[:, [other_ind, zind, var_ind]]),
-                          lbls=lbls_in_slice,
-                          display=test)
-                        zvals = rays[:, 1]
-
-        for lbl, ray, zval in zip(np.unique(lbls_in_slice), rays, zvals):
-            projected_coords[lbl][other_ind] = ray[0] / zval
-            projected_coords[lbl][zind] = 1
-            projected_coords[lbl][var_ind] = 0
-        else:
-            pair_centers_in_slice = []
-            for pair in pairs_tested:
-                centers_per_pair = []
-                for val in pair:
-                    if val in cluster_centers.keys():
-                        center = cluster_centers[val][[other_ind, zind]]
-                    else:
-                        center = np.repeat(np.nan, 2)
-                    centers_per_pair += [center]
-                else:
-                    pair_centers_in_slice += [np.array(centers_per_pair)]
-
-            else:
-                if test:
-                    fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(10, 10))
-                    ax.scatter((pts_in_slice[:, other_ind]), (pts_in_slice[:, zind]), c=clbls, alpha=0.5,
-                      edgecolors='none',
-                      marker='o',
-                      cmap='tab20')
-                    ax.set_aspect('equal')
-                    xmin, xmax = np.percentile(self.points[:, other_ind], [0, 100])
-                    ymin, ymax = np.percentile(self.points[:, zind], [0, 100])
-                    x_range, y_range = xmax - xmin, ymax - ymin
-                    angles = np.arctan2(pts_in_slice[:, zind], pts_in_slice[:, other_ind])
-                    key_angles = np.percentile(angles, [25, 50, 75])
-                    key_pts = []
-                    for angle in key_angles:
-                        ind = np.argmin(abs(angles - angle))
-                        key_pt = pts_in_slice[(ind, [other_ind, zind])]
-                        key_pts += [key_pt]
-                    else:
-                        key_pts = np.array(key_pts)
-                        xvals, yvals = key_pts.T
-                        inset_axes = []
-                        inset_box_width = y_range / 6
-                        inset_width = inset_box_width / 2
-                        inset_ys = np.repeat(ymax, 3)
-                        inset_ys -= inset_box_width * np.arange(1, 4)
-                        inset_ys = inset_ys[::-1]
-                        inset_xs = np.repeat(xmin, 3)
-                        inset_xs -= 1.1 * inset_box_width
-                        ax.set_ylim(ymin - 0.05 * y_range, ymax + 0.05 * y_range)
-                        ax.set_xlim(inset_xs.min(), xmax + 0.05 * x_range)
-                        sbn.despine(ax=ax, bottom=True, left=True)
-                        ax.set_xticks([])
-                        ax.set_yticks([])
-                        ax.annotate('300 pixels', (xmin, ymin))
-                        ax.plot([xmin, xmin + 300], [
-                         ymin - 0.025 * y_range, ymin - 0.025 * y_range],
-                          color='k', linewidth=5)
-                        for lbl, xval, yval, ins_x, ins_y in zip([
-                         'C.', 'B.', 'A.'], xvals, yvals, inset_xs, inset_ys):
-                            x_range = [
-                             xval - inset_width / 2, xval + inset_width / 2]
-                            y_range = [yval - inset_width / 2, yval + inset_width / 2]
-                            included = pts_in_slice[:, other_ind] > min(x_range)
-                            included *= pts_in_slice[:, other_ind] < max(x_range)
-                            included *= pts_in_slice[:, zind] > min(y_range)
-                            included *= pts_in_slice[:, zind] < max(y_range)
-                            y_center = pts_in_slice[(included, zind)].mean()
-                            axins = ax.inset_axes(
-                                [ins_x, ins_y, inset_box_width, inset_box_width],
-                                transform=(ax.transData))
-                            axins.scatter((pts_in_slice[:, other_ind]), (pts_in_slice[:, zind]), c=clbls, alpha=0.5,
-                              edgecolors='none',
-                              marker='o',
-                              cmap='tab20')
-                            axins.set_xlim(min(x_range), max(x_range))
-                            axins.set_ylim(y_center - inset_width / 2, y_center + inset_width / 2)
-                            axins.set_xticks([])
-                            axins.set_yticks([])
-                            rect, lines = ax.indicate_inset_zoom(axins, edgecolor='k')
-                            [line.set_visible(False) for line in lines]
-                            inset_axes += [axins]
-
-                included_pair = []
-                for pair in pairs_in_slice:
-                    included_pair += [pair[0] in lbls_set and pair[1] in lbls_set]
-                else:
-                    ioas = []
-                    for pair in pairs_in_slice:
-                        if pair[0] in lbls_set and pair[1] in lbls_set:
-                            ray1 = rays[(lbls_set == pair[0])][0]
-                            ray2 = rays[(lbls_set == pair[1])][0]
-                            center1 = pts_in_slice[(lbls_in_slice == pair[0])].mean(0)[[other_ind, zind]]
-                            center2 = pts_in_slice[(lbls_in_slice == pair[1])].mean(0)[[other_ind, zind]]
-                            ioa = np.arccos(np.dot(ray1, ray2.T))
-                            dx1, dy1 = np.squeeze(ray1)
-                            m1 = dy1 / dx1
-                            dx2, dy2 = np.squeeze(ray2)
-                            m2 = dy2 / dx2
-                            x1, y1 = center1
-                            x2, y2 = center2
-                            yint1 = y1 - m1 * x1
-                            yint2 = y2 - m2 * x2
-                            intersectx = (yint1 - yint2) / (m2 - m1)
-                            intersecty = m1 * intersectx + yint1
-                            plt.plot([x1, intersectx, x2], [y1, intersecty, y2], color='k',
-                              alpha=0.15)
-                            length = 10
-                            ioas += [ioa]
-                            pair_ind = np.where(np.all((pairs_tested - pair[np.newaxis] == 0), axis=1))
-                            var_IOAs[pair_ind] = ioa
-                            var_IOA_resids[pair_ind] = residuals
-                            if test:
-                                for center in (
-                                 center1, center2):
-                                    ax.scatter((center[0]), (center[1]), edgecolors='none', marker='.',
-                                      color='k')
-                                    for axins in inset_axes:
-                                        axins.scatter((center[0]), (center[1]), edgecolors='none', marker='.',
-                                          color='k')
-                                    else:
-                                        dx1, dy1 = np.squeeze(ray1)
-                                        m1 = dy1 / dx1
-                                        dx2, dy2 = np.squeeze(ray2)
-                                        m2 = dy2 / dx2
-                                        x1, y1 = center1
-                                        x2, y2 = center2
-                                        yint1 = y1 - m1 * x1
-                                        yint2 = y2 - m2 * x2
-                                        intersectx = (yint1 - yint2) / (m2 - m1)
-                                        intersecty = m1 * intersectx + yint1
-                                        ax.plot([x1, intersectx, x2], [y1, intersecty, y2], color='k',
-                                          alpha=0.15)
-                                        for axins in inset_axes:
-                                            axins.plot([x1, intersectx, x2], [y1, intersecty, y2], color='k',
-                                              alpha=0.15)
-                                        else:
-                                            ioa = np.arccos(np.dot(ray1, ray2.T))
-                                            ioas += [ioa]
-                                            pair_ind = np.where(np.all((pairs_tested - pair[np.newaxis] == 0), axis=1))
-                                            var_IOAs[pair_ind] = ioa
-                                            var_IOA_resids[pair_ind] = residuals
-                                            print_progress(num, len(pairs_tested))
-                                            num += 1
-
-                                else:
-                                    plt.sca(ax)
-                                    title = f"{var_lbl}=[{np.round(var_start, 2)}, {np.round(var_stop, 2)}]"
-                                    plt.title(title)
-                                    plt.tight_layout()
-                                    plt.show()
-                                    ioas = np.squeeze(np.array(ioas))
-                                    print_progress(num, 2 * len(pairs_tested))
-
-                    else:
-                        position_vector = np.array([centers[lbl] for lbl in cone_cluster_data.label.values])
-                        direction_vector = np.array([projected_coords[lbl] for lbl in cone_cluster_data.label.values])
-                        position_vector -= rotated_origin
-                        self.ommatidial_data['position_vector'] = position_vector.tolist()
-                        self.ommatidial_data['direction_vector'] = direction_vector.tolist()
-                        self.ommatidial_data.to_pickle(os.path.join(self.dirname, 'ommatidial_data.pkl'))
-                        self.ommatidial_data.to_csv((os.path.join(self.dirname, 'ommatidia_data.csv')), index=False)
-                        IOA_anatomical = np.sqrt(vertical_IOAs ** 2 + horizontal_IOAs ** 2)
-                        data_to_save = dict()
-                        cols = ['cluster1', 'cluster2',
-                         'cluster1_x', 'cluster1_y', 'cluster1_z',
-                         'cluster2_x', 'cluster2_y', 'cluster2_z',
-                         'cluster1_theta', 'cluster1_phi', 'cluster1_radii',
-                         'cluster2_theta', 'cluster2_phi', 'cluster2_radii',
-                         'anatomical_angle', 'orientation',
-                         'horizontal_angle', 'horizontal_IOA_residuals',
-                         'vertical_angle', 'vertical_IOA_residuals']
-                        for col in cols:
-                            data_to_save[col] = []
-                        else:
-                            for num, (
-                                    pair, anatomical, orientation, horizontal, horizontal_resids,
-                                    vertical, vertical_resids) in enumerate(zip(
-                                        pairs_tested, IOA_anatomical, orientations, horizontal_IOAs,
-                                        horizontal_IOA_residuals, vertical_IOAs, vertical_IOA_residuals)):
-                                ind1, ind2 = pair
-                                ind1 = np.where(self.ommatidial_data.label.values == ind1)[0][0]
-                                ind2 = np.where(self.ommatidial_data.label.values == ind2)[0][0]
-                                cluster1 = self.ommatidial_data.loc[ind1]
-                                cluster2 = self.ommatidial_data.loc[ind2]
-                                for lbl, vals in zip(cols, [
-                                 ind1, ind2,
-                                 cluster1.x_center, cluster1.y_center, cluster1.z_center,
-                                 cluster2.x_center, cluster2.y_center, cluster2.z_center,
-                                 cluster1.theta_center, cluster1.phi_center, cluster1.r_center,
-                                 cluster2.theta_center, cluster2.phi_center, cluster2.r_center,
-                                 anatomical, orientation, horizontal, horizontal_resids,
-                                 vertical, vertical_resids]):
-                                    data_to_save[lbl] += [vals]
-                                else:
-                                    print_progress(num, len(pairs_tested))
-
-                            else:
-                                print('\n')
-                                interommatidial_data = pd.DataFrame.from_dict(data_to_save)
-                                interommatidial_data.to_csv(
-                                    (os.path.join(project_folder, 'interommatidial_data.csv')),
-                                    index=False)
-                                interommatidial_data.to_csv(
-                                    (os.path.join(project_folder, 'interommatidial_data.pkl')),
-                                    index=False)
-
-    def measure_interommatidia_fast(self, test=False, display=False, num_slices=21,
+    def measure_interommatidia(self, test=False, display=False, num_slices=21,
                                     neighborhood_smoothing=1):
         """Use the anatomical axes to quickly measure interommatidial angles.
 
@@ -3523,19 +3416,31 @@ class CTStack(Stack):
         # clusterer = cluster.KMeans(n_clusters=len(init_coords),
         #                            init=init_coords).fit(pos_orientations)
         # cluster_centers = clusterer.cluster_centers_
-        # plt.scatter(pair_orientations[:, 0], pair_orientations[:, 1], alpha=.005)
-        # plt.scatter(cluster_centers[:, 0], cluster_centers[:, 1], c=init_angs)
-        # plt.gca().set_aspect('equal')
-        # plt.show()
+        if test:
+            plt.scatter(pair_orientations[:, 0], pair_orientations[:, 1], alpha=.005)
+            plt.scatter(cluster_centers[:, 0], cluster_centers[:, 1], c=init_angs)
+            plt.gca().set_aspect('equal')
+            plt.show()
         # ii. find the cluster center with an angle closest to np.pi/2
-        cluster_angles = np.arctan2(cluster_centers[:, 1], cluster_centers[:, 0])
-        horizontal_axis = np.argmin(abs(np.pi/2 - cluster_angles))
+        cluster_angles = np.arctan2(cluster_centers[:, 0], cluster_centers[:, 1])
+        horizontal_angles = cluster_angles % (2 * np.pi)
+        horizontal_axis = np.argmin(abs(horizontal_angles))
+        # horizontal_axis = np.argmin(abs(cluster_angles))
         # iii. rotate everything by the difference between the horizontal axis and np.pi/2
-        ang_diff = np.pi/2 - cluster_angles[horizontal_axis]
+        ang_diff = -cluster_angles[horizontal_axis]
+        # ang_diff = cluster_angles[horizontal_axis]
+        # ang_diff = 0 - cluster_angles[horizontal_axis]
         # test: check that the rotation is correct at every level. for each of the following,
         # check that either the main orientation is around np.pi/2 or that a major ommatidial
         # axis is horizontal when plotted:
         # pair_pts
+        # test_rot = rotate(pair_pts[:, 0], ang_diff, axis=1).T
+        # fig, axes = plt.subplots(ncols=2)
+        # for ax, vals in zip(axes, [pair_pts[:, 0], test_rot]):
+        #     ax.scatter(vals[:, 0], vals[:, 2])
+        #     ax.set_aspect('equal')
+        # plt.show()
+        # breakpoint()
         pair_pts = rotate(pair_pts, ang_diff, axis=1).T
         pair_axes = rotate(pair_axes, ang_diff, axis=1).T
         pair_axes_smooth = rotate(pair_axes_smooth, ang_diff, axis=1).T
@@ -3619,7 +3524,7 @@ class CTStack(Stack):
         # process interommatidial pairs in vertical and horizontal sections
         print('\nProcessing interommatidial data:')
         for flat_dim, angle_col in zip(
-                [0, 2], ['angle_h', 'angle_v']):
+                [0, 2], ['angle_v', 'angle_h']):
             # find limits of the flattened dimension
             flat_vals = pair_centers[(..., flat_dim)]
             limits = np.linspace(flat_vals.min(), flat_vals.max(), num_slices)
@@ -4011,6 +3916,7 @@ class CTStack(Stack):
         three_d : bool, default=False
             Whether to use pyqtgraph to plot the cross section in 3D.
         """
+        breakpoint()
         lbls = self.labels[:]
         lbls_set = np.arange(max(lbls) + 1)
         scrambled_lbls = np.random.permutation(lbls_set)
@@ -4115,7 +4021,7 @@ class CTStack(Stack):
         data = self.ommatidial_data
         if projected:
             assert 'dx' in data.keys(), ("No smoothed direction vectors stored. "
-                                         f"Try running {self.measure_interommatidia_fast}")
+                                         f"Try running {self.measure_interommatidia}")
             # get direction and position vectors
             x, y, z = data[['x_', 'y_', 'z_']].values.T
             pos_vectors = np.array([x, y, z]).T
@@ -4461,14 +4367,26 @@ class CTStack(Stack):
             # super title
             plt.tight_layout(rect=[0, 0.03, 1, 0.95])
             plt.show()
+            # todo: calculate the projected and polar vertical and horizontal FOVs
+            FOV_h = np.diff(np.percentile(theta, [2.5, 97.5]))[0]
+            FOV_v = np.diff(np.percentile(phi, [2.5, 97.5])) [0]
+            th_proj, ph_proj, _ = polar_raw.T
+            no_nans = np.isnan(th_proj) == False
+            FOV_h_proj = np.diff(np.percentile(th_proj[no_nans], [2.5, 97.5]))[0]
+            FOV_v_proj = np.diff(np.percentile(ph_proj[no_nans], [2.5, 97.5]))[0]
+            # todo: calculate the ratio of vertical to horizontal radii of curvature
+            # eye length = 
+            vert_to_hori = (np.sin(FOV_h/2) / np.sin(FOV_v/2)) * (np.sin(FOV_v_proj/2) / np.sin(FOV_h_proj/2))
+            print(f"The vertical radius is {vert_to_hori:.3f} times the horizontal radius using FOV estimates.")
+            # breakpoint()
         else:
             # use spherical coordinates
             polar = rectangular_to_spherical(pos_vectors)
             theta, phi, radii = polar.T
         # swap horizontal and vertical angles for the plots below
-        angles_v = np.copy(interommatidial_data.angle_v.values)
-        interommatidial_data.angle_v = np.copy(interommatidial_data.angle_h.values)
-        interommatidial_data.angle_h = angles_v
+        # angles_v = np.copy(interommatidial_data.angle_v.values)
+        # interommatidial_data.angle_v = np.copy(interommatidial_data.angle_h.values)
+        # interommatidial_data.angle_h = angles_v
         # cluster orientations into 3 groups
         clusterer = cluster.KMeans(
             3, init=np.array([0, np.pi/2, np.pi])[:, np.newaxis], n_init=1).fit(
@@ -4534,7 +4452,7 @@ class CTStack(Stack):
                 meds_random = np.median(meds_random, axis=1)
                 low_ci, high_ci = np.percentile(meds_random, [.5, 99.5])
                 # make a label for the plotted data per  group
-                label = f"m={median: .2f}\nIQR=[{low: .2f}, {high: .2f}]\nCI=({low_ci: .2f}, {high_ci: .2f})"
+                label = f"N={len(sub_vals)}\nm={median: .2f}\nIQR=[{low: .2f}, {high: .2f}]\nCI=({low_ci: .2f}, {high_ci: .2f})"
                 print()
                 print(f"group # {group_num}, at {np.round(ori, 2)}$\degree$")
                 print(label)
@@ -4573,7 +4491,7 @@ class CTStack(Stack):
             meds_random = np.median(meds_random, axis=1)
             low_ci, high_ci = np.percentile(meds_random, [.5, 99.5])
             # make a label for the plotted data per  group
-            label = f"m={median: .2f}\nIQR=[{low: .2f}, {high: .2f}]\nCI=({low_ci: .2f}, {high_ci: .2f})"
+            label = f"N={len(sub_vals)}\nm={median: .2f}\nIQR=[{low: .2f}, {high: .2f}]\nCI=({low_ci: .2f}, {high_ci: .2f})"
             # plot median +/- IQR
             img_ax.plot([ori, ori], [low, high], color=color, alpha=.5)
             img_ax.scatter([ori, ori], [low_ci, high_ci], color=color, marker='_')
@@ -4591,6 +4509,114 @@ class CTStack(Stack):
         sbn.despine(ax=img_ax, left=True, trim=True)
         plt.tight_layout()
         plt.show()
+        # todo: get measurements of the horizontal and vertical IO angle components
+        # find the horizontal group using the smallest 
+        group_nums = np.arange(3)
+        horizontal_group = group_nums[np.argmin(abs(group_oris))]
+        diagonal_groups = np.delete(group_nums, horizontal_group)
+        horizontal_group = groups == horizontal_group
+        diagonal_group = np.in1d(groups, diagonal_groups)
+        # calculate the horizontal and vertical IO angles
+        angle_h = 180./ np.pi * interommatidial_data['angle_h'].values
+        angle_v = 180./ np.pi * interommatidial_data['angle_v'].values
+        # IO horizontal = hor. angle of hor. pairs + 1/2 of the hor. angle of diagonal pairs
+        io_horizontal = np.concatenate([.5 * angle_h[horizontal_group], angle_h[diagonal_group]])
+        # IO vertical   = 2/sqrt(3) * vertical angle of diagonal pairs
+        io_vertical = angle_v[diagonal_group]
+        # do the same but for interommatidial distances
+        # print the median 
+        for vals, lbl in zip([io_horizontal, io_vertical], ['Horizontal', 'Vertical']):
+            print(f"{lbl} IO components:")
+            low, med, high = np.percentile(vals, [25, 50, 75])
+            indices = np.arange(len(vals))
+            indices_random = np.random.choice(indices, (len(vals), 10000), replace=True)
+            meds_random = vals[indices_random]
+            meds_random = np.median(meds_random, axis=1)
+            low_ci, high_ci = np.percentile(meds_random, [.5, 99.5])
+            label = f"N={len(vals)}\nm={med: .2f}\nIQR=[{low: .2f}, {high: .2f}]\nCI=({low_ci: .2f}, {high_ci: .2f})"
+            print(label)
+        # plot the interommatidial diameters by their orientation like the total IO angles
+        pts1 = interommatidial_data[['pt1_x', 'pt1_y', 'pt1_z']].values
+        pts2 = interommatidial_data[['pt2_x', 'pt2_y', 'pt2_z']].values
+        diams = np.linalg.norm(pts2 - pts1, axis=-1)
+        # get radius of intersection using the total IO angles and their corresponding diameters
+        radii = diams / (angles * np.pi / 180)
+        # todo: remove outliers
+        for vals, lbl in zip([diams, radii], ['Distance', 'Radius']):
+            no_nans = np.isnan(vals) == False
+            no_nans = no_nans * (np.isinf(vals) == False)
+            vals = np.copy(vals)[no_nans]
+            maxval = np.percentile(vals, 95)
+            BINS = [np.linspace(-90, 90), np.linspace(0, maxval, 50)]
+            # BINS = [np.linspace(-90, 90), np.linspace(0, 40, 50)]
+            # plot one 2D histogram
+            fig, axes = plt.subplots(ncols=2, figsize=(3.08, 4), gridspec_kw={'width_ratios':[4, 1]})
+            axes[0].hist2d(orientation[no_nans] * 180 / np.pi, vals, color='k', 
+                           bins=BINS, cmap=CMAP, edgecolor='none')
+            axes[0].set_xlabel('Orientation ($\\degree$)')
+            axes[0].set_xticks([-60, 0, 60])
+            axes[0].set_ylabel(f"{lbl} ($\mu$m)")
+            # plot stats per orientation group
+            img_ax = axes[0]
+            for group_num, group_ori, color in zip(
+                    group_set, group_oris, [red, green, blue]):
+                # grab subset of the data
+                # todo: get values and plot in the same loop
+                ori = 180 / np.pi * group_ori
+                # get values of this group
+                inds = groups[no_nans] == group_num
+                sub_vals = vals[inds]
+                # remove nans
+                # no_nans = np.isnan(sub_vals) == False
+                # sub_vals = sub_vals[no_nans]
+                low, median, high = np.percentile(sub_vals, [25, 50, 75])
+                # bootstrap sub_vals to get 99% CI of the median
+                indices = np.arange(len(sub_vals))
+                indices_random = np.random.choice(indices, (len(sub_vals), 10000), replace=True)
+                meds_random = sub_vals[indices_random]
+                meds_random = np.median(meds_random, axis=1)
+                low_ci, high_ci = np.percentile(meds_random, [.5, 99.5])
+                # make a label for the plotted data per  group
+                label = f"m={median: .2f}\nIQR=[{low: .2f}, {high: .2f}]\nCI=({low_ci: .2f}, {high_ci: .2f})"
+                # plot median +/- IQR
+                img_ax.plot([ori, ori], [low, high], color=color, alpha=.5)
+                img_ax.scatter([ori, ori], [low_ci, high_ci], color=color, marker='_')
+                img_ax.plot(ori, median, marker='.', color=color, label=label)
+            img_ax.legend(fontsize='xx-small')
+            sbn.despine(ax=axes[0], trim=True)
+            # plot the flattened histogram of diameters
+            no_nans = np.isnan(vals) == False
+            axes[1].hist(vals[no_nans], bins=BINS[1], orientation='horizontal', color='k', alpha=1)
+            ymin, ymax = axes[0].get_ylim()
+            axes[1].set_ylim(ymin, ymax)
+            axes[1].set_yticks([])
+            sbn.despine(ax=axes[1], trim=True, left=True)
+            plt.tight_layout()
+            plt.show()
+        # IO horizontal = hor. angle of hor. pairs + 1/2 of the hor. angle of diagonal pairs
+        # diams_h = np.concatenate([diams[diagonal_group]/2., diams[horizontal_group]/2])
+        # IO vertical   = 2/sqrt(3) * vertical angle of diagonal pairs
+        # diams_v = np.sqrt(3) * diams[diagonal_group] / 2.
+        # todo: measure the intersection radii assuming an isosceles triangle
+        # based on that, each radius is the diameters / IO angles
+        # radius_h = diams_h / io_horizontal
+        # radius_v = diams_v / io_vertical
+        # do the same but for interommatidial distances
+        # print the median 
+        for vals, lbl in zip(
+            [diams, radii], 
+            ['Diameters', 'Radius']):
+            print(f"{lbl}:")
+            no_nans = np.isnan(vals) == False
+            vals = np.copy(vals[no_nans])
+            low, med, high = np.percentile(vals, [25, 50, 75])
+            indices = np.arange(len(vals))
+            indices_random = np.random.choice(indices, (len(vals), 10000), replace=True)
+            meds_random = vals[indices_random]
+            meds_random = np.median(meds_random, axis=1)
+            low_ci, high_ci = np.percentile(meds_random, [.5, 99.5])
+            label = f"m={med: .2f}\nIQR=[{low: .2f}, {high: .2f}]\nCI=({low_ci: .2f}, {high_ci: .2f})"
+            print(label)
         # for each interommatidial angle component and total:
         # no_nans = (np.isnan(theta) == False) * (np.isnan(phi) == False)
         # for angs, title in zip([interommatidial_data.angle_h * 180 / np.pi,
@@ -4638,6 +4664,7 @@ class CTStack(Stack):
         thetas = np.concatenate([theta_horizontal, theta_vertical])
         phis = np.concatenate([phi_horizontal, phi_vertical])
         no_nans = np.isnan(phis) == False
+        breakpoint()
         if any([xmin is None, xmax is None]):
             xmin, xmax = 180 / np.pi * np.percentile(phis[no_nans], [0, 100])
             x_range = xmax - xmin
@@ -4666,7 +4693,8 @@ class CTStack(Stack):
             fig = None
             if figsize is not None:
                 fig = plt.figure(figsize=figsize)
-            summary.plot(xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax, fig=fig)
+            summary.plot(xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax, fig=fig,
+                         vmin=vmin, vmax=vmax)
         plt.show()
 
 
@@ -4799,7 +4827,8 @@ class CTStack(Stack):
     def ommatidia_detecting_algorithm(self, polar_clustering=True, display=False,
                                       test=False, three_d=False, stage=None,
                                       prefiltered=False, regular=True, manual_edit=False,
-                                      window_length=np.pi/3, neighborhood_smoothing=3):
+                                      window_length=np.pi/3, neighborhood_smoothing=3,
+                                      thickness=.5):
         """Apply the 3D ommatidia detecting algorithm (ODA-3D).
         
 
@@ -4834,6 +4863,9 @@ class CTStack(Stack):
             The order of nearby ommatidia to use for smoothing their direction vectors. 1
             means to only use those immediately adajcent to each one. 2 includes second order
             neighbors and so on.
+        thickness : float, default=.5
+            The proportion of the residuals used for generating the  eye raster
+            for running the ODA.
         """
         conditions = {'stack':'points' in dir(self), 
                       'cross-sections':'theta' in dir(self), 
@@ -4852,7 +4884,7 @@ class CTStack(Stack):
                         print(f"{num + 1}. {dataset.capitalize()}")
                         choices += [num + 1]
             while stage not in choices + [0, 'last']:
-                stage = input(f"Enter the number {choices} to load from that stage and continue processing, enter 'last', or press 0 to start over: ")
+                stage = input(f"Enter the number {choices} to load from that stage anprocessing, enter 'last', or press 0 to start over: ")
                 try:
                     stage = int(stage)
                 except:
@@ -4883,36 +4915,14 @@ class CTStack(Stack):
             self.get_cross_sections(chunk_process=(len(self.points) > 1000000))
             self.save_database()
             if self.display:
-                self.plot_cross_section(three_d, residual_proportion=0.5)
+                self.plot_cross_section(three_d, residual_proportion=thickness)
         print('\nCross-section loaded.')
         if stage < 3:
             self.find_ommatidial_clusters(polar_clustering=polar_clustering,
                                           window_length=window_length, test=test,
-                                          regular=regular, manual_edit=manual_edit)
+                                          regular=regular, manual_edit=manual_edit,
+                                          thickness=thickness)
             self.save_database()
-            # if manual_edit:
-            #     # make a raster image of the polar coordinates
-            #     pts = Points(self.pts[:], sphere_fit=False, rotate_com=False,
-            #                  spherical_conversion=False, polar=self.polar[:])
-            #     # calculate pixel size based on shortest distances
-            #     dists_tree = spatial.KDTree(pts.polar[:, :2])
-            #     dists, inds = dists_tree.query((pts.polar[:, :2]), k=2)
-            #     min_dist = 2 * np.mean(dists[:, 1])
-            #     raster, (theta_vals, phi_vals) = pts.rasterize(pixel_length=min_dist)
-            #     pixel_size = phi_vals[1] - phi_vals[0]
-            #     # generate a boolean mask by smoothing the thresholded raster image
-            #     mask = raster > 0
-            #     mask = ndimage.gaussian_filter(mask.astype(float), 2)
-            #     mask /= mask.max()
-            #     thresh = 0.1
-            #     mask = mask > thresh
-            #     mask = 255 * mask.astype(int)
-            #     raster = 255 * (raster / raster.max())
-            #     raster = raster.astype('uint8')
-            #     # use OmmatidiaGUI to fix coordinates
-            #     fix_ommatidia = OmmatidiaGUI(raster, coords_arr=pts.polar[:, :2])
-            #     self.ommatidial_inds = fix_ommatidia.coords
-            #     self.ommatidia = self.pixel_size * self.ommatidial_inds
             if self.display:
                 self.plot_ommatidial_clusters(three_d)
         print('\nOmmatidial clusters loaded.')
@@ -4924,15 +4934,84 @@ class CTStack(Stack):
                 self.plot_ommatidial_data(three_d, scatter=plot_scatter)
         print('\nOmmatidial data loaded.')
         if stage < 5:
-            self.measure_interommatidia_fast(test=test,
-                                             neighborhood_smoothing=neighborhood_smoothing)
+            self.measure_interommatidia(test=test,
+                                        neighborhood_smoothing=neighborhood_smoothing)
             self.save_database()
             if self.display:
                 plot_scatter = len(self.interommatidial_data) < 100000
                 self.plot_interommatidial_data(three_d=three_d, scatter=plot_scatter)
         print()
 
-    def plot_data_3d(self):
+    def plot_raw_scan(self, raw_scan_folder, bin_size=4, window=None, app=None):
+        """Plot the raw scan as a Volume."""
+        # load the raw data into a 4D array (x, y, z, RGBA)
+        stack = Stack(raw_scan_folder, img_extension=self.img_extension)
+        # go through each layer and load the pixel values into 
+        first_layer = Layer(stack.fns[0])
+        img = first_layer.load()
+        if img.ndim == 2:
+            height, width = img.shape
+            num_channels = 1
+        elif img.ndimg == 3:
+            height, width, num_channels = img.shape
+        # make an empty volume to place all the values
+        # new_img = ndimage.zoom(img, 1./bin_size)
+        num_layers = math.ceil(len(stack.fns) / bin_size)
+        # new_height, new_width = new_img.shape
+        new_height, new_width = int(height / bin_size), int(width / bin_size)
+        # volume = np.zeros((num_layers, new_height, new_width, num_channels), dtype=img.dtype)
+        volume = np.zeros((num_layers+1, new_height, new_width, num_channels), dtype='uint8')
+        # bin average the layers
+        layer_num = 0
+        height_trunc, width_trunc = bin_size * (height // bin_size), bin_size * (width // bin_size)
+        img_avg = []
+        for num, layer in enumerate(stack.iter_layers()):
+            img = layer.load()
+            # img_avg += [img]
+            img_avg += [img // (2 ** 8)]
+            # if len(img_avg) == bin_size or num == len(stack.fns):
+            if num % bin_size == 0 or num == len(stack.fns)-1:
+                # img_avg = (np.array(img_avg) // (2 ** 8)).astype('uint8')
+                num_sub_layers = len(img_avg)
+                img_avg = np.asarray(img_avg)
+                # img_avg = np.asarray(img_avg).astype('uint16')
+                # bin average the image
+                img_avg = img_avg[:, :height_trunc, :width_trunc]
+                img_avg = img_avg.reshape((num_sub_layers, height_trunc // bin_size, bin_size, width_trunc // bin_size, bin_size))
+                img_avg = img_avg.mean((0, 2, 4))
+                # set the average in the volume
+                try:
+                    # volume[layer_num, ..., 0] = img_avg
+                    volume[num // bin_size, ..., 0] = img_avg
+                except:
+                    breakpoint()
+                layer_num += 1
+                # reset img_avg
+                img_avg = []
+            print_progress(num, len(stack.fns))
+        std = 1.5
+        zeros = volume == 0
+        # volume = ndimage.gaussian_filter(volume, (std, std, std, 0), mode='nearest')
+        # volume[zeros] *= 0
+        # reduce the volume along the first dimension by averaging
+        volume_rgb = plt.cm.viridis(volume[..., 0])
+        # volume_rgb = plt.cm.gray(volume[..., 0])
+        volume_rgb *= 255
+        # zeros = np.where(volume == 0)
+        # volume_rgb[zeros[:-1]] = 0
+        # alpha = volume[..., 0]
+        # alpha[alpha < 5] *= 0
+        alpha = np.copy(volume[..., 0])
+        include = alpha > 0
+        alpha[include] = 20
+        volume_rgb[..., -1] = alpha
+        # volume_rgb = np.repeat(volume, 4, axis=-1)
+        # volume_rgb[..., -1] = 255
+        self.volume = gl.GLVolumeItem(volume_rgb, sliceDensity=1)
+        self.volume.scale(self.depth_size, self.pixel_size, self.pixel_size)
+        window.addItem(self.volume)
+
+    def plot_data_3d(self, raw_scan_folder=None):
         """Use pyqtgraph to plot in 3D any of the results.
         """
         # import widgets for a GUI
@@ -5019,6 +5098,102 @@ class CTStack(Stack):
         main_window.setCentralWidget(widget)
         # resize window to show both the buttons and GLViewWidget
         # run exec loop
+        # self.plot_ommatidial_clusters()
+        if raw_scan_folder is not None:
+            self.plot_raw_scan(raw_scan_folder, window=display_window, app=app)
+        main_window.show()
+        app.exec()
+
+    def plot_data_volume(self, raw_scan_folder=None):
+        """Use pyqtgraph to plot in 3D any of the results.
+        """
+        # import widgets for a GUI
+        from PyQt5.QtWidgets import (
+            QApplication,
+            QLabel,
+            QMainWindow,
+            QPushButton,
+            QVBoxLayout,
+            QHBoxLayout,
+            QWidget)
+        # what datasets are available?
+        conditions = {'stack':'points' in dir(self), 
+                      'cross-sections':'theta' in dir(self), 
+                      'cluster labels':'labels' in dir(self), 
+                      'ommatidial data':'ommatidial_data' in dir(self), 
+                      'interommatidial data':'interommatidial_data' in dir(self)}
+        # these are the functions
+        functions = [
+            self.plot_raw_data,
+            self.plot_cross_section,
+            self.plot_ommatidial_clusters,
+            self.plot_ommatidial_data_3d,
+            self.plot_interommatidial_data_3d]
+        # make a main window with options for displaying different graphs
+        app = QApplication([])
+        main_window = QMainWindow()
+        main_window.resize(640, 480)
+        # make a GLViewWidget for displaying each of the scatterplots
+        display_window = gl.GLViewWidget()
+        # make a layout to place the display window inside the main window
+        layout = QHBoxLayout()
+        # main_window.addItem(display_window)
+        display_window.show()
+        # make a frame for placing all the buttons
+        box_layout = QVBoxLayout()
+        # make buttons for all the available datasets
+        buttons = []
+        for (title, success), function in zip(conditions.items(), functions):
+            if success:
+                button = QRadioButton(title)
+                button.clicked.connect(partial(function, three_d=True, app=app,
+                                               window=display_window,
+                                               main_window=main_window))
+                button.released.connect(display_window.clear)
+                print(function)
+                box_layout.addWidget(button)
+                buttons += [button]
+        # add sliders for minimum and maximum values in the colormap
+        # class MplCanvas(FigureCanvasQTAgg):
+        #     def __init__(self, parent=None, width=2, height=4, dpi=100):
+        #         # fig = plt.Figure(figsize=(width, height), dpi=dpi)
+        #         # self.axes = fig.add_subplot(111)
+        #         fig, self.axes = fig.suplots(ncols=3)
+        #         super(MplCanvas, self).__init__(fig)
+
+        # plt_plot = MplCanvas(main_window)
+        # # setup attributes to modify in the respective functions, updating the values of
+        # # the slider
+        # self.vmin, self.vmax = 0, 255
+        # self.vmin_slider = Slider(plt_plot.axes[0], 'min', self.vmin, self.vmax_possible,
+        #                           valinit=self.vmin, valfmt='%d', color='k',
+        #                           orientation='vertical')
+        # self.vmin_slider.on_changed(
+
+        # # make a function to run everytime one of the buttons is clicked
+        # def update_sliders(self):
+            
+
+        # plt_plot.axes.scatter(range(10), range(10))
+        # box_layout.addWidget(plt_plot)
+
+
+        # format widget
+        # widget = QWidget()
+        # widget.setLayout(box_layout)
+        # place buttons inside main window
+        # layout.addWidget(widget, 1)
+        layout.addLayout(box_layout, 1)
+        # place GLViewWidget inside main window too
+        layout.addWidget(display_window, 5)
+        widget = QWidget()
+        widget.setLayout(layout)
+        main_window.setCentralWidget(widget)
+        # resize window to show both the buttons and GLViewWidget
+        # run exec loop
+        # self.plot_ommatidial_clusters()
+        if raw_scan_folder is not None:
+            self.plot_raw_scan(raw_scan_folder, window=display_window, app=app)
         main_window.show()
         app.exec()
 
@@ -5068,29 +5243,86 @@ class CTStack(Stack):
             # surface area is the sum of the areas of the triangles making up 
             surface_area = sum(areas)
             stats_summary.loc[len(stats_summary)]= ['surface area (mm^2)', surface_area, np.nan, 1, np.nan, np.nan, np.nan, np.nan, np.nan]
-            # add surface area data to the stats dataframe
-            chull_polar = spatial.ConvexHull(polar[:, :2])
-            contour_polar = polar[chull_polar.vertices]
-            # fit an ellipse to the contour and store the minor and major diameters as minimum
-            # and maximum values of the variable
-            ellipse = LSqEllipse()
-            ellipse.fit(contour_polar.T[:2])
-            center, width, height, phi = ellipse.parameters()
-            fov_spherical_minor, fov_spherical_major = min(width, height), max(width, height)
-            # b. FOV - both spherical and projected (and specifying the minor and major diameters)
-            # spherical: use contour of the polar coordinates (theta and phi)
-            fov_spherical = sum(solid_angles)
-            stats_summary.loc[len(stats_summary)] = [
-                'FOV spherical', fov_spherical, np.nan, 1, fov_spherical_minor,
-                np.nan, np.nan, np.nan, fov_spherical_major]
             # projected: use projected polar coordinates and same tesselation approach
             x, y, z = self.ommatidial_data[['x_', 'y_', 'z_']].values.T
             pos_vectors = np.array([x, y, z]).T
             dx, dy, dz = self.ommatidial_data[['dx', 'dy', 'dz']].values.T
             dir_vectors = np.array([dx, dy, dz]).T
             dir_vectors /= np.linalg.norm(dir_vectors, axis=1)[:, np.newaxis]
-            proj_coords = project_coords(pos_vectors, dir_vectors, radius=projected_radius)
+            proj_coords = project_coords(pos_vectors, dir_vectors, radius=projected_radius, convex=True)
             proj_polar = rectangular_to_spherical(proj_coords)
+            # todo: use the tessalated coordinates to measure the major and minor eye diameters
+            # use the spherical polar coordinates to measure the spherical FOVs
+            # use convex hull of 95% kde
+            for coords, lbl in zip(
+                [polar, proj_polar],
+                ['spherical', 'projected']):
+                # avoid nans
+                no_nans = np.any(np.isnan(coords), axis=1) == False
+                kde = stats.gaussian_kde(coords[no_nans, :2].T)
+                # get grid of points around 
+                th, ph = coords.T[:2, no_nans]
+                width, height = th.max() - th.min(), ph.max() - ph.min()
+                th_grid = np.linspace(th.min() - .05*width,  th.max() + .05*width, 200)
+                ph_grid = np.linspace(ph.min() - .05*height, ph.max() + .05*height, 200)
+                th_grid, ph_grid = np.meshgrid(th_grid, ph_grid)
+                grid = np.array([th_grid.flatten(), ph_grid.flatten()])
+                density = kde(grid).reshape(200, 200)
+                density /= density.max()
+                # get convex hull of the 95% density region
+                xs, ys = np.where(density > .5)
+                try:
+                    pts = np.array([xs, ys]).T
+                    chull_coords = spatial.ConvexHull(pts)
+                except:
+                    breakpoint()
+                contour_coords = pts[chull_coords.vertices].T
+                contour_th = th_grid[contour_coords[0], contour_coords[1]]
+                contour_ph = ph_grid[contour_coords[0], contour_coords[1]]
+                contour_coords = np.array([contour_th, contour_ph]).T
+                # measure the major diameter using the longest distance among polar coordinates
+                diffs = contour_coords[np.newaxis] - contour_coords[:, np.newaxis]
+                dists = np.linalg.norm(diffs, axis=-1)
+                max_dist = dists.max()
+                ind = np.where(dists == max_dist)[0]
+                major_vector = contour_coords[ind]
+                major_vector_diff = major_vector[1] - major_vector[0]
+                major_vector_unit = major_vector_diff / np.linalg.norm(major_vector_diff)
+                major_vector_reciprocal = np.array([-major_vector_unit[1], major_vector_unit[0]])
+                major_vector_unit = np.array([major_vector_unit, major_vector_reciprocal])
+                # todo: get major and minor FOV's by rotating and projecting all of the 
+                # coords coordinates onto those vectors
+                coords_rotated = np.dot(
+                    coords[:, :2] - coords[:, :2].mean(0), 
+                    major_vector_unit.T) + coords[:, :2].mean(0)
+                major_rotated = np.dot(
+                    major_vector - major_vector.mean(0),
+                    major_vector_unit.T) + major_vector.mean(0)
+                # test: plot the original and rotated coordinates
+                # fig, axes = plt.subplots(ncols=2)
+                # original coordinates:
+                # axes[0].scatter(coords[:, 0], coords[:, 1])
+                # axes[0].plot(major_vector[:, 0], major_vector[:, 1], '-ok')
+                # # rotated:
+                # axes[1].scatter(coords_rotated[:, 0], coords_rotated[:, 1])
+                # axes[1].plot(major_rotated[:, 0], major_rotated[:, 1], '-ok')
+                # [ax.set_aspect('equal') for ax in axes]
+                # plt.tight_layout()
+                # plt.show()
+                # use the rotated coordinates to measure the field of view based on 
+                # the distributions of each dimension
+                xs, ys = coords_rotated.T
+                fov_major = np.diff(np.percentile(xs, [5, 95]))
+                fov_minor = np.diff(np.percentile(ys, [5, 95]))
+                # calculate the solid angle of each pixel in the density grid
+                pxl_solid_angle = abs((th_grid[0, 1] - th_grid[0, 0])*(ph_grid[1, 0] - ph_grid[0, 0]))
+                fov = sum(density > .5).sum() * pxl_solid_angle
+                # the FOV is the sum of all the solid angles in the density grid
+                stats_summary.loc[len(stats_summary)] = [
+                    f"FOV_{lbl}", fov, np.nan, 1, fov_minor[0],
+                    np.nan, np.nan, np.nan, fov_major[0]]
+            # todo: use the projected polar coordinates to measure the projected FOVs
+            # instead of using the tesselation, use the 95% kde
             proj_polar[:, 2] = 1
             include = np.any(np.isnan(proj_polar), axis=1) == False
             proj_tess = spatial.Delaunay(proj_polar[include][:, :2])
@@ -5122,16 +5354,16 @@ class CTStack(Stack):
             # a. number of ommatidia - len(self.ommatidial_data)
             ommatidia_count = len(self.ommatidial_data)
             stats_summary.loc[len(stats_summary.index)] = [
-                'ommatidia count', ommatidia_count, np.nan, 1, np.nan, np.nan,
+                'ommatidia_count', ommatidia_count, np.nan, 1, np.nan, np.nan,
                 np.nan, np.nan, np.nan]
             # b. ommatidial density - ommatidia count / FOV
             polar_density = ommatidia_count / fov_projected
             density = ommatidia_count / surface_area
             stats_summary.loc[len(stats_summary)] = [
-                "polar density (facets/sr)", polar_density, np.nan, 1, np.nan, np.nan, np.nan,
+                "polar_density_(facets/sr)", polar_density, np.nan, 1, np.nan, np.nan, np.nan,
                 np.nan, np.nan]
             stats_summary.loc[len(stats_summary)] = [
-                'density (facets/mm^2)', density, np.nan, 1, np.nan, np.nan, np.nan,
+                'density_(facets/mm^2)', density, np.nan, 1, np.nan, np.nan, np.nan,
                 np.nan, np.nan]
             for var in ['radius', 'lens_diameter', 'lens_diameter_adj','lens_area',
                         'skewness', 'spherical_IOA', 'cross_section_area',
@@ -5144,7 +5376,7 @@ class CTStack(Stack):
                     var, vals.mean(), vals.std(), len(vals),
                     key_vals[0], key_vals[1], key_vals[2], key_vals[3], key_vals[4]]
         self.stats = stats_summary
-        return stats
+        return self.stats
         # # interommatidial data
         # if 'interommatidial_data' in dir(self):
         #     # get the 3 orientation groups
