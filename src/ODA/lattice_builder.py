@@ -1,4 +1,5 @@
-from analysis_tools import *
+# from analysis_tools import *
+from ODA import *
 import numpy as np
 import scipy
 
@@ -16,24 +17,35 @@ class Lattice():
         self.p_vector1 = p_vector1
         self.p_vector2 = p_vector2
 
-    def render(self, x_range, y_range, scale=1, test=False):
+    def render(self, xres=100, yres=100, scale=1, test=False, noise=0, noise_model='uniform'):
         """Produce the elements of the lattice within bounds.
 
 
         Parameters
         ----------
-        x_range : tuple, (xmin, xmax)
-            The range of x values included in the lattice as a pair.
-        y_range : tuple, (ymin, ymax)
-            The range of y values included in the lattice as a pair.
-        
+        x_res, y_res : float, default=100
+            The resolution (pixel count) used along the x or y axis. 
+        scale : float, default=1
+            Roughly the diameter of each ommatidium.
+        noise : float, default=0
+            Magnitude of the position noise applied to the ommatidial lattice. If 
+            noise_model == 'uniform', then this specifies the maximum radius applied. 
+            If noise_model == 'gaussian', this specifies the standard deviation of the 
+            gaussian distribution.
+        noise_model : str, default='uniform'
+            The distribution used for randomizing the ommatidial diameter distribution.
+            Options: 'uniform' and 'gaussian'. 
+
         Returns
         -------
         pts : np.ndarray, shape=(N, 2)
             The N points from the lattice within bounds.
         """
-        xmin, xmax = sorted(list(x_range))
-        ymin, ymax = sorted(list(y_range))
+        self.scale = scale
+        self.xres, self.yres = xres, yres
+        self.noise = noise
+        xmin, xmax = 0, xres
+        ymin, ymax = 0, yres
         # find bounds of the unit array for making the lattice
         bounds = np.array([[xmin, ymin], [xmax, ymin], [xmax, ymax], [xmin, ymax]])
         self.basis = np.array([scale * self.p_vector1, scale * self.p_vector2])
@@ -56,29 +68,83 @@ class Lattice():
             plt.gca().set_aspect('equal')
             plt.show()
         pts = pts[include]
+        # add noise if specified
+        if noise > 0:
+            if noise_model == 'uniform':
+                shifts = np.random.uniform(-noise, noise, size=pts.shape)
+            elif noise_model == 'gaussian':
+                shifts = np.random.normal(0, scale=noise, size=pts.shape)
+            pts += shifts
         return(pts)
-    
-    def simulate_eye(self, scale=1, noise_std=0, contrast=1.0, xres=100, yres=100):
+
+    def render_vf(self, fov_x=360, fov_y=180, diam_mean=5, diam_std=0, noise_model='gaussian'):
+        """Produce the elements of the lattice within bounds.
+
+
+        Parameters
+        ----------
+        fov_x, fov_y : float, default=360, 180
+            The angle of view along the horizontal, fov_x, or vertical, fov_y, dimension of
+            the simulated visual field.
+        diam_mean : float, default=5
+            The simulated mean diameter used for generating the ommatidial lattice params.        
+        diam_std : float, default=0
+            The simulated standard deviation for ommatidial diameters in the simulated ommatidial
+            lattice.
+
+        Returns
+        -------
+        pts : np.ndarray, shape=(N, 2)
+            The N points from the lattice within bounds.
+        """
+        self.scale = scale
+        self.xres, self.yres = xres, yres
+        self.noise = noise
+        xmin, xmax = 0, xres
+        ymin, ymax = 0, yres
+        # find bounds of the unit array for making the lattice
+        bounds = np.array([[xmin, ymin], [xmax, ymin], [xmax, ymax], [xmin, ymax]])
+        self.basis = np.array([scale * self.p_vector1, scale * self.p_vector2])
+        bounds_t = np.dot(bounds, np.linalg.inv(self.basis))
+        xmin_t, ymin_t = bounds_t.min(0)
+        xmax_t, ymax_t = bounds_t.max(0)
+        # get unit lattice within these bounds
+        xvals_t = np.arange(xmin_t, xmax_t + 1)
+        yvals_t = np.arange(ymin_t, ymax_t + 1)
+        xgrid_t, ygrid_t = np.meshgrid(xvals_t, yvals_t)
+        # transform to lattice coordinates using dot product
+        pts_t = np.array([xgrid_t, ygrid_t]).transpose(1, 2, 0)
+        pts = np.dot(pts_t, self.basis)
+        xs, ys = pts[..., 0], pts[..., 1]
+        # remove points outside the specified ranges
+        include = (xs > xmin) * (xs <=xmax) * (ys > ymin) * (ys <= ymax)
+        if test:
+            # sanity check
+            plt.scatter(xs[include], ys[include])
+            plt.gca().set_aspect('equal')
+            plt.show()
+        pts = pts[include]
+        # add noise if specified
+        if noise > 0:
+            if noise_model == 'uniform':
+                shifts = np.random.uniform(-noise, noise, size=pts.shape)
+            elif noise_model == 'gaussian':
+                shifts = np.random.normal(0, scale=noise, size=pts.shape)
+            pts += shifts
+        return(pts)
+
+    def simulate_eye(self, contrast=1.0, xres=100, yres=100, **render_kwargs):
         """Generate an artificial hexagonal lattice at depending on scale and position noise.
         
         Parameters
         ----------
-        scale : float, default=1
-            The scale of the spacing between neighboring points.
-        noise : float, default=0
-            The standard deviation of gaussian noise applied to the regular hexagonal lattice.
+        contrast : float between 0 and 1, default=1
+            The maximum contrast between the darkest and lightest points in the rendered eye image.
         """
-        x_range = (0, xres)
-        y_range = (0, yres)
-        self.pts = self.render(x_range, y_range, scale=scale)
-        self.pts = self.pts.astype('float')
-        # add the optional gaussian noise to the pts
-        if noise_std > 0:
-            # noise = np.random.normal(0, scale=noise_std, size=self.pts.shape)
-            noise = np.random.uniform(-noise_std, noise_std, size=self.pts.shape)
-            self.pts += noise
+        xpad, ypad = .5*xres, .5*yres
+        self.pts = self.render(xres=(xpad + xres), yres=(ypad + yres), **render_kwargs).astype(float)
         # make a high resolution image with all pts coordinates set to 1 and the others set to 0
-        img = np.zeros((yres, xres), dtype='float')
+        img = np.zeros((round(yres + ypad), round(xres + xpad)), dtype='float')
         xs, ys = self.pts.T.astype(int)
         # make a voronoi diagram with these points
         if len(self.pts) < 4:
@@ -94,7 +160,7 @@ class Lattice():
         lines = []
         dists = []
         height, width = img.shape
-        for region in voronoi.regions:
+        for region in voronoi.ridge_vertices:
             verts = np.round(voronoi.vertices[region]).astype(int)
             # plot a line between all of the vertices
             for start, stop in zip(verts[:-1], verts[1:]):
@@ -103,10 +169,10 @@ class Lattice():
                     lines += [np.array([line[0], line[1]]).T]
                     dists += [np.repeat(np.linalg.norm(stop - start), len(line[0]))]
         # todo: fix the long lines! the distance method isn't working at all scales
-        breakpoint()
         dists = np.concatenate(dists)
         lines = np.concatenate(lines)
-        thresh = 3 * np.percentile(dists, 50)
+        # get the median diameter
+        thresh = 2 * np.percentile(dists, 50)
         include = lines > 0
         include = np.all(include, axis=1)
         include *= lines[:, 0] < height
@@ -114,6 +180,9 @@ class Lattice():
         include *= dists < thresh            
         lines = lines[include]
         img[lines[:, 0], lines[:, 1]] = 255
+        # plt.imshow(img)
+        # plt.show()
+        # breakpoint()
         # lines = np.unique(lines)
         # img[ys % yres, xs % xres] = 1
         # # estimate the diameter of each lens based on the distance of each point to their 3 nearest points
@@ -169,10 +238,15 @@ class Lattice():
         #     std = xres/5
         #     # apply a gaussian blur
         #     blur = ndimage.gaussian_filter(img, sigma=std, mode='constant', cval=0)
-        blur = ndimage.gaussian_filter(img, 2)
+        blur = ndimage.gaussian_filter(img, self.scale/5, mode='constant')
         blur /= blur.max()
         # convert to 8-bit image
         blur = (255 * contrast * blur).astype('uint8')
+        # crop boundary conditions
+        xpad, ypad = int(round(xpad)), int(round(ypad))
+        blur = blur[ypad//2:-ypad//2, xpad//2:-xpad//2]
+        # correct the pts 
+        self.pts -= np.array([ypad//2, xpad//2])
         return blur
 
 
@@ -295,28 +369,97 @@ def reciprocal(img):
     power = signal.correlate2d(power, power, mode='same')
     return power
 
-scales = np.logspace(0, 2, 10)[3:][::-1]
-fig, axes = plt.subplots(ncols=len(scales), nrows=2)
-for scale, row in zip(scales, axes.T):
-    lattice = Lattice()
-    img = lattice.simulate_eye(scale=scale, xres=150, yres=150)
-    row[0].imshow(img, cmap='Greys')
-    # apply the ODA to this image and get the lens centers
-    mask = np.ones(img.shape, dtype=bool)
-    # mask = img > 0
-    stack = Eye(arr=img, mask_arr=mask)
-    stack.oda(bright_peak=False)
-    if len(stack.ommatidial_inds) > 0:
-        ys, xs = stack.ommatidial_inds.T
-        row[0].scatter(xs, ys, color='r', marker='.', s=1)
-    # plot the reciprocal image too
-    row[1].imshow(reciprocal(img), cmap='Greys')
-for ax in axes.flatten():
-    ax.set_xticks([])
-    ax.set_yticks([])
-    sbn.despine(ax=ax, bottom=True, left=True)
-plt.tight_layout()
-plt.show()
+# if __name__ == '__main__':
+if False:
+    scales = np.logspace(0, 2, 10)[::-1]
+    fig, axes = plt.subplots(ncols=len(scales), nrows=2 ,figsize=(12, 4))
+    for scale, row in zip(scales, axes.T):
+            lattice = Lattice()
+            img = lattice.simulate_eye(scale=scale, xres=200, yres=200)
+            row[0].imshow(img, cmap='Greys')
+            # apply the ODA to this image and get the lens centers
+            mask = np.ones(img.shape, dtype=bool)
+            # mask = img > 0
+            stack = Eye(arr=img, mask_arr=mask)
+            stack.oda(bright_peak=False, regular=True)
+            if len(stack.ommatidial_inds) > 0:
+                ys, xs = stack.ommatidial_inds.T
+                row[0].scatter(xs, ys, color='r', marker='.', s=1)
+                # measure the distribution of nearest distances between pairs of input and output ommatidial centers
+                input_centers = lattice.pts
+                include = np.all((input_centers > 0)*(input_centers < img.shape[0]), axis=1)
+                input_centers = input_centers[include]
+                ys, xs = input_centers.T
+                row[0].scatter(xs, ys, color='b', marker='.', s=1)
+                output_centers = stack.ommatidial_inds
+                dist_tree = scipy.spatial.KDTree(output_centers)
+                dists, inds = dist_tree.query(input_centers)
+                low, mid, high = np.percentile(dists, [25, 50, 75])
+                med, iqr = mid, high-low
+                row[0].set_title(f"{med:.2f}+/-{iqr:.3f}")
+                # measure the input diameter and compare to the resultant one
+                dist_tree = scipy.spatial.KDTree(input_centers)
+                dists, inds = dist_tree.query(input_centers, k=5)
+                dists = dists[:, 1:]
+                diam_input = np.median(dists)
+                # store results
+                # results['scale']['count_prop'] += [len(output_centers)/len(input_centers)]
+                # results['scale']['diam_prop'] += [stack.ommatidial_diameter/diam_input]
+                # results['scale']['dist_med'] += [med]
+                # results['scale']['dist_iqr'] += [iqr]
+            # else:
+            #     results['scale']['count_prop'] += [np.nan]
+            #     results['scale']['diam_prop'] += [np.nan]
+            #     results['scale']['dist_med'] += [np.nan]
+            #     results['scale']['dist_iqr'] += [np.nan]
+            # results['scale']['xvals'] += [scale]
+            # plot the reciprocal image too
+            row[1].imshow(np.log(reciprocal(img)), cmap='Greys')
+    for ax in axes.flatten():
+        ax.set_xticks([])
+        ax.set_yticks([])
+        sbn.despine(ax=ax, bottom=True, left=True)
+    plt.suptitle("Median Distance +/- IQR")
+    plt.tight_layout()
+    plt.show()
+    # scales = np.logspace(0, 2, 10)[3:][::-1]
+    # fig, axes = plt.subplots(ncols=len(scales), nrows=2)
+    # for scale, row in zip(scales, axes.T):
+    #     lattice = Lattice()
+    #     img = lattice.simulate_eye(scale=scale, xres=200, yres=200)
+    #     row[0].imshow(img, cmap='Greys')
+    #     # apply the ODA to this image and get the lens centers
+    #     mask = np.ones(img.shape, dtype=bool)
+    #     # mask = img > 0
+    #     stack = Eye(arr=img, mask_arr=mask)
+    #     stack.oda(bright_peak=False)
+    #     if len(stack.ommatidial_inds) > 0:
+    #         ys, xs = stack.ommatidial_inds.T
+    #         row[0].scatter(xs, ys, color='r', marker='.', s=1)
+    #         # measure the distribution of nearest distances between pairs of input and output ommatidial centers
+    #         input_centers = lattice.pts
+    #         include = np.all((input_centers > 0)*(input_centers < img.shape[0]), axis=1)
+    #         input_centers = input_centers[include]
+    #         ys, xs = input_centers.T
+    #         row[0].scatter(xs, ys, color='b', marker='.', s=1)
+    #         output_centers = stack.ommatidial_inds
+    #         dist_tree = scipy.spatial.KDTree(output_centers)
+    #         dists, inds = dist_tree.query(input_centers)
+    #         low, mid, high = np.percentile(dists, [25, 50, 75])
+    #         med, iqr = mid, high-low
+    #         row[0].set_title(f"{med:.2f}+/-{iqr:.3f}")
+    #         dist_tree = scipy.spatial.KDTree(input_centers)
+    #         dists, inds = dist_tree.query(input_centers, k=5)
+    #         dists = dists[:, 1:]
+    #         diam = np.median(dists)
+    #     # plot the reciprocal image too
+    #     row[1].imshow(np.log(reciprocal(img)), cmap='Greys')
+    # for ax in axes.flatten():
+    #     ax.set_xticks([])
+    #     ax.set_yticks([])
+    #     sbn.despine(ax=ax, bottom=True, left=True)
+    # plt.tight_layout()
+    # plt.show()
 
 # scale = scales[4]
 # noise_stds = np.linspace(0, scale/2, 6)

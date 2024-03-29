@@ -121,11 +121,11 @@ class VarSummary():
             self.ymax = ymax
         if vmin is not None:
             self.vmin = vmin
-        elif self.vmin is None:
+        elif self.vmin is None and self.colorvals is not None:
             self.vmin = self.colorvals.min()
         if vmax is not None:
             self.vmax = vmax
-        elif self.vmax is None:
+        elif self.vmax is None and self.colorvals is not None:
             self.vmax = self.colorvals.max()
         # x_range = self.x.max() - self.x.min()
         # y_range = self.y.max() - self.y.min()
@@ -170,56 +170,70 @@ class VarSummary():
                     wspace=0, hspace=0)
         else:
             self.gridspec = gridspec
-        # calculate ideal range for colorvals to share between vertical and horizontal axes
-        no_nans = np.isnan(self.colorvals) == False
-        no_infs = np.isinf(self.colorvals) == False
-        no_nans = no_nans * no_infs
-        if self.vmin is None and self.vmax is None:
-            cmin, cmax = self.colorvals[no_nans].min(), self.colorvals[no_nans].max()
-            pad = .025 * (cmax - cmin)
-            cmin -= pad
-            cmax += pad
-            self.cmin = cmin
-            self.cmax = cmax
-        else:
-            cmin = self.vmin
-            cmax = self.vmax
-        # generate ticks for colorvals
-        crange = cmax - cmin
-        scale = np.round(np.log10(crange))
-        cticks = np.linspace(np.round(cmin,  - int(scale - 1)),
-                             np.round(cmax,  - int(scale - 1)), 4)[1:-1]
-        cticks = np.round(cticks, int(scale - 1))
+        if self.colorvals is not None:
+            # calculate ideal range for colorvals to share between vertical and horizontal axes
+            no_nans = np.isnan(self.colorvals) == False
+            no_infs = np.isinf(self.colorvals) == False
+            no_nans = no_nans * no_infs
+            if self.vmin is None and self.vmax is None:
+                cmin, cmax = self.colorvals[no_nans].min(), self.colorvals[no_nans].max()
+                pad = .025 * (cmax - cmin)
+                cmin -= pad
+                cmax += pad
+                self.cmin = cmin
+                self.cmax = cmax
+            else:
+                cmin = self.vmin
+                cmax = self.vmax
+            # generate ticks for colorvals
+            crange = cmax - cmin
+            scale = np.round(np.log10(crange))
+            cticks = np.linspace(np.round(cmin,  - int(scale - 1)),
+                                np.round(cmax,  - int(scale - 1)), 4)[1:-1]
+            cticks = np.round(cticks, int(scale - 1))
         # plot 2d heatmap
         if margins:
             self.heatmap_ax = self.fig.add_subplot(self.gridspec[0, 1])
         else:
             self.heatmap_ax = self.fig.add_subplot(self.gridspec[0, 0])            
-        no_nans = np.isnan(self.colorvals) == False
-        grid = scipy.interpolate.griddata(self.pts[no_nans],
-                                          self.colorvals[no_nans],
-                                          np.array([xvals, yvals]).T,
-                                          method='nearest')
-        grid = grid.astype(float)
-        mask = np.histogram2d(self.pts[:, 0], self.pts[:, 1],
-                              bins=[grid.shape[0], grid.shape[1]])
-        grid[mask[0] == 0] = np.nan
-        no_nans = np.isnan(grid) == False
-        self.plot_heatmap(xs, ys, grid, inset=inset, margins=margins)
+        if self.colorvals is not None:
+            no_nans = np.isnan(self.colorvals) == False
+            grid = scipy.interpolate.griddata(self.pts[no_nans],
+                                            self.colorvals[no_nans],
+                                            np.array([xvals, yvals]).T,
+                                            method='nearest')
+            grid = grid.astype(float)
+            mask = np.histogram2d(self.pts[:, 0], self.pts[:, 1],
+                                bins=[grid.shape[0], grid.shape[1]])
+            grid[mask[0] == 0] = np.nan
+            no_nans = np.isnan(grid) == False
+        else:
+            grid = np.histogram2d(self.pts[:, 0], self.pts[:, 1], bins=[xvals.shape[1], xvals.shape[0]])
+        self.vmin, self.vmax = grid[0].min(), grid[0].max()
+        self.plot_heatmap(xs, ys, grid[0], inset=inset, margins=margins)
         # self.heatmap_ax.set_title(self.suptitle)
         # make colorbar/histogram
         if margins:
             self.colorbar_ax = self.fig.add_subplot(self.gridspec[0, 2])
         else:
             self.colorbar_ax = self.fig.add_subplot(self.gridspec[0, 1])
-        bins = np.linspace(cmin, cmax, 101)
-        counts, bin_edges = np.histogram(self.colorvals, bins=bins)
-        # self.histogram = sbn.distplot(self.colorvals, kde=False, color=self.color,
-        #                               ax=self.colorbar_ax, vertical=True, bins=bins,
-        #                               axlabel=False)
-        self.histogram = sbn.histplot(y=self.colorvals, kde=False, color=self.color,
-                                      ax=self.colorbar_ax, bins=bins, fill=True,
-                                      alpha=.25)
+        if self.colorvals is not None:
+            bins = np.linspace(cmin, cmax, 101)
+            counts, bin_edges = np.histogram(self.colorvals, bins=bins)
+            # self.histogram = sbn.distplot(self.colorvals, kde=False, color=self.color,
+            #                               ax=self.colorbar_ax, vertical=True, bins=bins,
+            #                               axlabel=False)
+            self.histogram = sbn.histplot(y=self.colorvals, kde=False, color=self.color,
+                                        ax=self.colorbar_ax, bins=bins, fill=True,
+                                        alpha=.25)
+        else:
+            # colorbar should represent counts of points in each bin instead of the variable
+            # so replace with a histogram of the counts drawn from the grid
+            positive = grid[0] > 0
+            counts, bins = np.histogram(grid[0][positive].flatten(), bins=100)
+            self.histogram = sbn.histplot(y=grid[0][positive].flatten(), kde=False, color=self.color,
+                                          ax=self.colorbar_ax, bins=bins, fill=True, alpha=.25)
+            cmin, cmax = grid[0].min(), grid[0].max()
         bin_edges = np.repeat(bins, 2)[1:-1]
         heights = np.repeat(counts, 2)
         self.colorbar_ax.plot(heights, bin_edges, color='w')
@@ -254,11 +268,19 @@ class VarSummary():
             bins_vertical -= diff/2
             # go through each bin and calculate median, IQR, and 99% CI
             for bin_low, bin_high in zip(bins_vertical[:-1], bins_vertical[1:]):
-                include = (self.y > bin_low) * (self.y <= bin_high)
-                sub_vals = np.asarray(self.colorvals[include])
-                no_nans = np.isnan(sub_vals) == False
-                if np.any(no_nans):
-                    low, mid, high = np.percentile(sub_vals[no_nans], [25, 50, 75])
+                sub_vals = []
+                if self.colorvals is not None:
+                    include = (self.y > bin_low) * (self.y <= bin_high)
+                    sub_vals = np.asarray(self.colorvals[include])
+                    no_nans = np.isnan(sub_vals) == False
+                    sub_vals = sub_vals[no_nans]
+                else:
+                    include = (yvals.T > bin_low) * (yvals.T <= bin_high)
+                    sub_vals = grid[0][include]
+                    positive = sub_vals > 0
+                    sub_vals = sub_vals[positive]
+                if len(sub_vals) > 0:
+                    low, mid, high = np.percentile(sub_vals, [25, 50, 75])
                     # bootstrap subvals for CI interval of the median
                     inds = np.arange(len(sub_vals))
                     rand_inds = np.random.choice(inds, (1000, len(sub_vals)))
@@ -274,10 +296,15 @@ class VarSummary():
                     storage += [val]
             bins_vertical_labels = .5 * (bins_vertical[:-1] + bins_vertical[1:])
             # plot
-            no_nans = np.isnan(self.colorvals) == False
-            self.vertical_ax.hist2d(self.colorvals[no_nans],
-                                    self.y[no_nans], bins=[15, ys.shape[0]],
-                                    cmap='Greys')
+            if self.colorvals is not None:
+                no_nans = np.isnan(self.colorvals) == False
+                self.vertical_ax.hist2d(self.colorvals[no_nans],
+                                        self.y[no_nans], bins=[15, ys.shape[0]],
+                                        cmap='Greys')
+            else:
+                positive = grid[0] > 0
+                self.vertical_ax.hist2d(grid[0][positive].flatten(), yvals.T[positive].flatten(), bins=[15, ys.shape[0]],
+                                        cmap='Greys')
             self.vertical_ax.plot(mids, bins_vertical_labels, color=red)
             for y, low, high, low_ci, high_ci in zip(bins_vertical_labels, lows, highs,
                                                      lows_ci, highs_ci):
@@ -288,7 +315,8 @@ class VarSummary():
             #     ys, lows, highs, alpha=.5, color=red, edgecolor="none", lw=0)
             self.vertical_ax.set_ylim(self.ymin, self.ymax)
             self.vertical_ax.set_xlim(cmin, cmax)
-            self.vertical_ax.set_xticks(cticks)
+            if self.colorvals is not None:
+                self.vertical_ax.set_xticks(cticks)
             self.vertical_ax.set_ylabel("Elevation ($^\circ$)")
             sbn.despine(ax=self.vertical_ax)
             # get descriptive stats on the horizontal axis
@@ -305,9 +333,16 @@ class VarSummary():
             bins_horizontal -= diff/2
             # go through each bin and calculate median, IQR, and 99% CI
             for bin_low, bin_high in zip(bins_horizontal[:-1], bins_horizontal[1:]):
-                include = (self.x > bin_low) * (self.x <= bin_high)
-                if np.any(include):
+                sub_vals = []
+                if self.colorvals is not None:
+                    include = (self.x > bin_low) * (self.x <= bin_high)
                     sub_vals = np.asarray(self.colorvals[include])
+                else:
+                    include = (yvals.T > bin_low) * (yvals.T <= bin_high)
+                    sub_vals = grid[0][include]
+                    positive = sub_vals > 0
+                    sub_vals = sub_vals[positive]
+                if len(sub_vals) > 0:
                     no_nans = np.isnan(sub_vals) == False
                     low, mid, high = np.percentile(sub_vals[no_nans], [25, 50, 75])
                     # bootstrap subvals for CI interval of the median
@@ -328,10 +363,17 @@ class VarSummary():
             # plot expected colorvals using bootstrapped CIs along horizontal
             self.horizontal_ax = self.fig.add_subplot(self.gridspec[1, 1],
                                                       sharex=self.heatmap_ax)
-            no_nans = np.isnan(self.colorvals) == False
-            self.horizontal_ax.hist2d(self.x[no_nans], self.colorvals[no_nans],
-                                      bins=[xs.shape[0], 15],
-                                      cmap='Greys')
+            if self.colorvals is not None:
+                no_nans = np.isnan(self.colorvals) == False
+                self.horizontal_ax.hist2d(self.x[no_nans], self.colorvals[no_nans],
+                                        bins=[xs.shape[0], 15],
+                                        cmap='Greys')
+            else:
+                # self.horizontal_ax.hist2d(grid[0].flatten(), xvals.T.flatten(), bins=[xs.shape[0], 15],
+                #                         cmap='Greys')
+                positive = grid[0] > 0
+                self.horizontal_ax.hist2d(xvals.T[positive].flatten(), grid[0][positive].flatten(), bins=[xs.shape[0], 15],
+                                        cmap='Greys')
             for x, low, high, low_ci, high_ci, mid in zip(bins_horizontal_labels, lows, highs,
                                                           lows_ci, highs_ci, mids):
                 self.horizontal_ax.plot([x, x], [low, high], color=red, alpha=.5)
@@ -343,7 +385,8 @@ class VarSummary():
             #     xs, lows, highs, alpha=.2, color=self.color, edgecolor="none", lw=0)
             self.horizontal_ax.set_xlim(self.xmin, self.xmax)
             # self.horizontal_ax.set_ylabel(self.color_label)
-            self.horizontal_ax.set_yticks(cticks)
+            if self.colorvals is not None:
+                self.horizontal_ax.set_yticks(cticks)
             sbn.despine(ax=self.horizontal_ax)
             self.horizontal_ax.set_ylim(cmin, cmax)
             self.horizontal_ax.set_xlabel("Azimuth ($^\circ$)")

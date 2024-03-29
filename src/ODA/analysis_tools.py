@@ -1424,7 +1424,7 @@ class Eye(Layer):
         return self.eye
 
     def get_ommatidia(self, bright_peak=True, fft_smoothing=5, square_lattice=False,
-                      high_pass=False, regular=True):
+                      high_pass=False, regular=True, min_dist=0):
         """Detect ommatidia coordinates assuming hex or square lattice.
 
         Use the ommatidia detecting algorithm (ODA) to find the center of
@@ -1445,7 +1445,8 @@ class Eye(Layer):
             Whether to also filter frequencies below the fundamental one.
         regular : bool, default=False
             Whether to assume the ommatidial lattice is approximately regular.
-        
+        min_dist : int, default=0
+
         Atributes
         ---------
         __freqs :  np.ndarray
@@ -1517,8 +1518,7 @@ class Eye(Layer):
                 pos_freqs = self._Eye__freqs > 0
                 thresh = 2 * self._Eye__freqs[pos_freqs].min()
                 # find peak frequencies
-                peaks = peak_local_max((self.reciprocal),
-                                       num_peaks=10, min_distance=5)
+                peaks = peak_local_max((self.reciprocal), num_peaks=10, min_distance=2)
                 ys, xs = peaks.T
                 # get the key frequencies and correlation values
                 key_vals = correlations[ys, xs]
@@ -1575,10 +1575,13 @@ class Eye(Layer):
             smooth_surface = self.filtered_image
             if not bright_peak:
                 smooth_surface = smooth_surface.max() - smooth_surface
+            min_distance = max(int(round(min_dist / self.pixel_size)), int(round(dist / 4)))
             self.ommatidial_inds = peak_local_max(smooth_surface,
-              min_distance=(int(round(dist / 4))), exclude_border=True,
+              min_distance=min_distance, exclude_border=True,
               threshold_abs=1)
             ys, xs = self.ommatidial_inds.T
+            if len(xs) > 100:
+                breakpoint()
             self.ommatidial_inds = self.ommatidial_inds[self.mask[(ys, xs)]]
             self.ommatidia = self.ommatidial_inds * self.pixel_size
         else:
@@ -1640,7 +1643,8 @@ class Eye(Layer):
     def ommatidia_detecting_algorithm(self, bright_peak=True, fft_smoothing=5,
                                       square_lattice=False, high_pass=False,
                                       num_neighbors=3, sample_size=100, plot=False,
-                                      plot_fn=None, regular=True, manual_edit=False):
+                                      plot_fn=None, regular=True, manual_edit=False,
+                                      min_dist=0):
         """The complete algorithm for measuring ommatidia in images.
 
         
@@ -1670,6 +1674,8 @@ class Eye(Layer):
             Whether to assume the ommatidial lattice is approximately regular.
         manual_edit : bool
             Whether to allow the user to manually edit the ommatidia coordinates.
+        min_dist : float, default=0
+            Minimum distance between ommatidia to be considered separate.
 
         Attributes
         ----------
@@ -1698,7 +1704,8 @@ class Eye(Layer):
                            fft_smoothing=fft_smoothing,
                            square_lattice=square_lattice,
                            high_pass=high_pass,
-                           regular=regular)
+                           regular=regular,
+                           min_dist=min_dist)
         # todo: allow for editing the ommatidia coordinates
         if manual_edit:
             fix_ommatidia = OmmatidiaGUI(img_arr=self.image, coords_arr=self.ommatidial_inds)
@@ -2512,7 +2519,7 @@ class CTStack(Stack):
     def find_ommatidial_clusters(self, polar_clustering=True, window_length=np.pi / 6,
                                  window_pad=np.pi / 20, image_size=10000, mask_blur_std=2,
                                  square_lattice=False, test=False, regular=True,
-                                 manual_edit=False, thickness=.5):
+                                 manual_edit=False, thickness=.5, min_dist=0):
         """2D running window applying ODA to spherical projections.
 
         
@@ -2543,6 +2550,8 @@ class CTStack(Stack):
         thickness : float, default=.5
             The proportion of the residuals used for generating the 
             eye raster for running the ODA.
+        min_dist : float, default=0
+            The minimum distance between ommatidia to be considered.
 
         Attributes
         ----------
@@ -2672,9 +2681,9 @@ class CTStack(Stack):
                         # for our raster image
                         dists_tree = spatial.KDTree(sub_segment.polar[:, :2])
                         dists, inds = dists_tree.query((sub_segment.polar[:, :2]), k=2)
-                        min_dist = 2 * np.mean(dists[:, 1])
+                        min_distance = 2 * np.max(dists[:, 1])
                         raster, (theta_vals, phi_vals) = sub_segment.rasterize(
-                            image_size=image_size, pixel_length=min_dist)
+                            image_size=image_size, pixel_length=min_distance)
                         pixel_size = phi_vals[1] - phi_vals[0]
                         # generate a boolean mask by smoothing the thresholded raster image
                         mask = raster > 0
@@ -2686,11 +2695,18 @@ class CTStack(Stack):
                         raster = 255 * (raster / raster.max())
                         raster = raster.astype('uint8')
                         # use the ODA 2D to find ommatidial centers
-                        eye = Eye(arr=raster, pixel_size=pixel_size, mask_arr=mask,
-                                  mask_fn=None)
+                        eye = Eye(arr=raster, pixel_size=pixel_size, mask_arr=mask, mask_fn=None)
                         eye.oda(plot=False, square_lattice=False, bright_peak=True,
-                                regular=regular, manual_edit=manual_edit)
+                                regular=regular, manual_edit=manual_edit, min_dist=min_dist)
                         centers = eye.ommatidia
+                        if len(centers) > 100:
+                            breakpoint()
+                        # test: plot the centers on the raster image
+                        # center_inds = eye.ommatidial_inds
+                        # plt.imshow(raster, cmap='gray')
+                        # plt.scatter(center_inds[:, 1], center_inds[:, 0], c='r')
+                        # plt.show()
+
                         # TODO: fix bug resulting in one HUGE segment of points. this is compressing
                         # the raster image or warping it due to the curvature and affecting the ODA.
                         # Basically, make sure that the segments are evenly partitioned
@@ -3090,13 +3106,22 @@ class CTStack(Stack):
                 # get the ommatidial cluster coordinates
                 pts_centered = np.copy(self.points[inds])
                 pts_centered = pts_centered - center
-                anatomical_basis = fit_line(pts_centered)
+                # use a random subset of 100000 points to fit the line
+                if len(pts_centered) > 100000:
+                    # find the largest interval to skip through pts_centered to
+                    # get a subset of about 100000 points
+                    interval = math.ceil(len(pts_centered) / 10000)
+                    subset = pts_centered[::interval]
+                    anatomical_basis = fit_line(subset)
+                else:
+                    anatomical_basis = fit_line(pts_centered)
                 # the anatomical vector is the direction vector that minimizes the angle
                 # with the vector pointing to the eye center
                 anatomical_vector = np.array([
                     anatomical_basis, -anatomical_basis])
                 angs = np.arccos(np.dot(anatomical_vector, sphere_vector))
                 ind = angs == angs.min()
+                # get the vector that is closest to the radial vector
                 anatomical_vector = anatomical_vector[ind].min(0)
                 # get the cross-sectional area of the cluster using the anatomical
                 # vector. Use vector as basis, rotate pts, find area of convex hull
@@ -3893,13 +3918,19 @@ class CTStack(Stack):
             scatter.show()
         else:
             # plot the cross section residuals
+            # summary = VarSummary(180 / np.pi * phi, 180 / np.pi * theta,
+            #                      resids, suptitle='Cross Section Residuals',
+            #                      scatter=False, image_size=img_size,
+            #                      color_label='Residual Difference (um)', marker='.')
+            # summary.plot(inset=inset, margins=margins)
+            # plot the 2D histogram of the polar coordinates
             summary = VarSummary(180 / np.pi * phi, 180 / np.pi * theta,
-                                 resids, suptitle='Cross Section Residuals',
+                                 colorvals=None, suptitle='Cross Section 2D Histogram',
                                  scatter=False, image_size=img_size,
-                                 color_label='Residual Difference (um)', marker='.')
+                                 color_label='concentration', marker='.')
             summary.plot(inset=inset, margins=margins)
             plt.show()
-            # plot the points within the residual proportion specified
+
 
 
     def plot_ommatidial_clusters(self, three_d=False, app=None, window=None, **kwargs):
@@ -3910,7 +3941,6 @@ class CTStack(Stack):
         three_d : bool, default=False
             Whether to use pyqtgraph to plot the cross section in 3D.
         """
-        breakpoint()
         lbls = self.labels[:]
         lbls_set = np.arange(max(lbls) + 1)
         scrambled_lbls = np.random.permutation(lbls_set)
@@ -4822,7 +4852,7 @@ class CTStack(Stack):
                                       test=False, three_d=False, stage=None,
                                       prefiltered=False, regular=True, manual_edit=False,
                                       window_length=np.pi/3, neighborhood_smoothing=3,
-                                      thickness=.5):
+                                      thickness=.5, min_dist=0):
         """Apply the 3D ommatidia detecting algorithm (ODA-3D).
         
 
@@ -4860,6 +4890,8 @@ class CTStack(Stack):
         thickness : float, default=.5
             The proportion of the residuals used for generating the  eye raster
             for running the ODA.
+        min_dist : float, default=0
+            The minimum distance between ommatidia to consider them as separate.
         """
         conditions = {'stack':'points' in dir(self), 
                       'cross-sections':'theta' in dir(self), 
@@ -4877,12 +4909,14 @@ class CTStack(Stack):
                     if loaded:
                         print(f"{num + 1}. {dataset.capitalize()}")
                         choices += [num + 1]
-            while stage not in choices + [0, 'last']:
-                stage = input(f"Enter the number {choices} to load from that stage anprocessing, enter 'last', or press 0 to start over: ")
-                try:
+            choices += [0]
+            choices_str = [str(choice) for choice in choices]
+            while stage not in choices + ['last']:
+                stage = input(f"Enter the number {choices} to load from that stage of processing, enter 'last', or press 0 to start over: ")
+                if stage in choices_str:
                     stage = int(stage)
-                except:
-                    pass
+                elif stage == 'last':
+                    stage = max(choices)
         # if 'last' was entered, load the most advanced stage
         if stage == 'last':
             stage = 0
@@ -4915,7 +4949,7 @@ class CTStack(Stack):
             self.find_ommatidial_clusters(polar_clustering=polar_clustering,
                                           window_length=window_length, test=test,
                                           regular=regular, manual_edit=manual_edit,
-                                          thickness=thickness)
+                                          thickness=thickness, min_dist=min_dist)
             self.save_database()
             if self.display:
                 self.plot_ommatidial_clusters(three_d)

@@ -36,6 +36,7 @@ def rgb_to_hsv(rgb):
         ret = np.repeat(rgb, 3, axis=(-1))
     return ret
 
+
 # make a class for plotting a heatmap with distplots along the axes
 class VarSummary():
     def __init__(self, xs, ys, colorvals, cmap='viridis', image_size=10**5,
@@ -101,37 +102,38 @@ class VarSummary():
         if xmin is None:
             self.xmin = self.x.min()
         else:
-            self.xmin = xmin - self.x_offset
+            # self.xmin = xmin - self.x_offset
+            self.xmin = xmin
         if xmax is None:
             self.xmax = self.x.max()
         else:
-            self.xmax = xmax - self.x_offset
+            # self.xmax = xmax - self.x_offset
+            self.xmax = xmax
         if ymin is None:
             self.ymin = self.y.min()
         else:
-            self.ymin = ymin - self.y_offset
+            # self.ymin = ymin - self.y_offset
+            self.ymin = ymin
         if ymax is None:
             self.ymax = self.y.max()
         else:
-            self.ymax = ymax - self.y_offset
-        if vmin is None:
-            self.vmin = self.colorvals.min()
-        else:
+            # self.ymax = ymax - self.y_offset
+            self.ymax = ymax
+        if vmin is not None:
             self.vmin = vmin
-        if vmax is None:
-            self.vmax = self.colorvals.max()
-        else:
+        elif self.vmin is None:
+            self.vmin = self.colorvals.min()
+        if vmax is not None:
             self.vmax = vmax
+        elif self.vmax is None:
+            self.vmax = self.colorvals.max()
         # x_range = self.x.max() - self.x.min()
         # y_range = self.y.max() - self.y.min()
         x_range = self.xmax - self.xmin
         y_range = self.ymax - self.ymin
         # figure out side lengths needed for input image size
         ratio = y_range / x_range
-        try:
-            x_len = int(np.round(np.sqrt(self.image_size/ratio)))
-        except:
-            breakpoint()
+        x_len = int(np.round(np.sqrt(self.image_size/ratio)))
         # get x and y ranges corresponding to image size
         xs = np.linspace(self.xmin, self.xmax, x_len)
         self.raster_pixel_length = xs[1] - xs[0]
@@ -139,8 +141,8 @@ class VarSummary():
         xs = xs[:-1] + (self.raster_pixel_length / 2.)
         ys = ys[:-1] + (self.raster_pixel_length / 2.)
         xvals, yvals = np.meshgrid(xs, ys)
-        self.xpad = .1 * (abs(self.xmax - self.xmin))
-        self.ypad = .1 * (abs(self.ymax - self.ymin))
+        self.xpad = .05 * (abs(self.xmax - self.xmin))
+        self.ypad = .05 * (abs(self.ymax - self.ymin))
         self.xmin, self.xmax = self.xmin - self.xpad, self.xmax + self.xpad
         self.ymin, self.ymax = self.ymin - self.ypad, self.ymax + self.ypad
         # split figure into axes using a grid
@@ -274,7 +276,7 @@ class VarSummary():
             # plot
             no_nans = np.isnan(self.colorvals) == False
             self.vertical_ax.hist2d(self.colorvals[no_nans],
-                                    self.y, bins=[15, ys.shape[0]],
+                                    self.y[no_nans], bins=[15, ys.shape[0]],
                                     cmap='Greys')
             self.vertical_ax.plot(mids, bins_vertical_labels, color=red)
             for y, low, high, low_ci, high_ci in zip(bins_vertical_labels, lows, highs,
@@ -327,7 +329,7 @@ class VarSummary():
             self.horizontal_ax = self.fig.add_subplot(self.gridspec[1, 1],
                                                       sharex=self.heatmap_ax)
             no_nans = np.isnan(self.colorvals) == False
-            self.horizontal_ax.hist2d(self.x, self.colorvals[no_nans],
+            self.horizontal_ax.hist2d(self.x[no_nans], self.colorvals[no_nans],
                                       bins=[xs.shape[0], 15],
                                       cmap='Greys')
             for x, low, high, low_ci, high_ci, mid in zip(bins_horizontal_labels, lows, highs,
@@ -348,7 +350,7 @@ class VarSummary():
         plt.suptitle(self.suptitle)
         # plt.tight_layout()
 
-    def plot_heatmap(self, xs, ys, grid, inset=False, inset_width=10, margins=True):
+    def plot_heatmap(self, xs, ys, grid, inset=False, inset_width=20, margins=True):
         # self.heatmap = self.heatmap_ax.scatter(
         #     self.x, self.y, c=self.colorvals, cmap=self.cmap,
         #     vmin=self.cmin, vmax=self.cmax)
@@ -415,12 +417,14 @@ class VarSummary():
                         colorvals -= self.vmin
                         colorvals /= (self.vmax - self.vmin)
                         colors = cmap(colorvals)
+                        breakpoint()
                         self.heatmap_axins.scatter(xs[include], ys[include], c=colors[include],
                                                    marker=self.marker)
             else:
                 # plot a bunch of circles with colors from colorvals and areas from marker_sizes
                 cmap = plt.get_cmap(self.cmap)
                 colorvals = np.copy(self.colorvals)
+                
                 colorvals[colorvals < self.vmin] = 0
                 colorvals -= self.vmin
                 colorvals /= (self.vmax - self.vmin)
@@ -490,9 +494,10 @@ class VarSummary():
         if margins:
             sbn.despine(ax=self.heatmap_ax, bottom=True, left=True)
         else:
-            sbn.despine(ax=self.heatmap_ax, bottom=False, left=False)
+            sbn.despine(ax=self.heatmap_ax, bottom=False, left=False, trim=True)
         self.heatmap_ax.label_outer()
-        self.heatmap_ax.tick_params(axis=u'both', which=u'both',length=0)
+        if margins:
+            self.heatmap_ax.tick_params(axis=u'both', which=u'both',length=0)
 
 
 class VarSummary_lines(VarSummary):
@@ -661,13 +666,13 @@ class tracker_window():
         # the vmin slider
         vminframe = plt.axes([fig_left + fig_width + .02, 0.1, .02, .05 + .7])
         self.vmin = Slider(
-            vminframe, 'min', 0, self.vmax_possible,
-            valinit=0, valfmt='%d', color='k', orientation='vertical')
+            vminframe, 'min', 1, self.vmax_possible,
+            valinit=1, valfmt='%d', color='k', orientation='vertical')
         self.vmin.on_changed(self.show_image)
         # the vmax slider
         vmaxframe = plt.axes([fig_left + fig_width + .1, 0.1, .02, .05 + .7])
         self.vmax = Slider(
-            vmaxframe, 'max', 0, self.vmax_possible, valinit=self.vmax_possible,
+            vmaxframe, 'max', 1, self.vmax_possible, valinit=self.vmax_possible,
             valfmt='%d', color='k', orientation='vertical')
         self.vmax.on_changed(self.show_image)
         # limit both sliders
@@ -1305,16 +1310,11 @@ class ColorSelector:
     def get_axvspan(self, x1, x2):
         """Get corners for updating the axvspans."""
         return np.array([
-         [
-          x1, 0.0],
-         [
-          x1, 1.0],
-         [
-          x2, 1.0],
-         [
-          x2, 0.0],
-         [
-          x1, 0.0]])
+         [x1, 0.0],
+         [x1, 1.0],
+         [x2, 1.0],
+         [x2, 0.0],
+         [x1, 0.0]])
 
     def displaying(self):
         """True if the GUI is currently displayed."""
@@ -1322,8 +1322,8 @@ class ColorSelector:
 
     def start_up(self):
         """Run when ready to display."""
-        self.RS = matplotlib.widgets.RectangleSelector((self.original_image_ax),
-          (self.onselect), drawtype='box')
+        self.RS = matplotlib.widgets.RectangleSelector(
+            (self.original_image_ax), (self.onselect))
         matplotlib.pyplot.connect('key_press_event', self.toggle_selector)
         matplotlib.pyplot.show()
 
