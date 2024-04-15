@@ -1424,7 +1424,7 @@ class Eye(Layer):
         return self.eye
 
     def get_ommatidia(self, bright_peak=True, fft_smoothing=5, square_lattice=False,
-                      high_pass=False, regular=True, min_dist=0):
+                      high_pass=False, regular=True, min_dist=0, manual_edit=False):
         """Detect ommatidia coordinates assuming hex or square lattice.
 
         Use the ommatidia detecting algorithm (ODA) to find the center of
@@ -1446,6 +1446,8 @@ class Eye(Layer):
         regular : bool, default=False
             Whether to assume the ommatidial lattice is approximately regular.
         min_dist : int, default=0
+        manual_edit : bool, default=False
+            Whether to manually edit the detected ommatidia using a GUI.
 
         Atributes
         ---------
@@ -1520,6 +1522,11 @@ class Eye(Layer):
                 # find peak frequencies
                 peaks = peak_local_max((self.reciprocal), num_peaks=10, min_distance=2)
                 ys, xs = peaks.T
+                # allow using the manual edit GUI to manually fix the peaks
+                if manual_edit:
+                    fix_ommatidia = OmmatidiaGUI(img_arr=self.reciprocal, coords_arr=peaks)
+                    peaks = np.round(fix_ommatidia.coords, 0).astype(int)
+                    ys, xs = peaks.T
                 # get the key frequencies and correlation values
                 key_vals = correlations[ys, xs]
                 key_freqs = self._Eye__freqs[(ys, xs)]
@@ -1580,8 +1587,6 @@ class Eye(Layer):
               min_distance=min_distance, exclude_border=True,
               threshold_abs=1)
             ys, xs = self.ommatidial_inds.T
-            if len(xs) > 100:
-                breakpoint()
             self.ommatidial_inds = self.ommatidial_inds[self.mask[(ys, xs)]]
             self.ommatidia = self.ommatidial_inds * self.pixel_size
         else:
@@ -1705,7 +1710,8 @@ class Eye(Layer):
                            square_lattice=square_lattice,
                            high_pass=high_pass,
                            regular=regular,
-                           min_dist=min_dist)
+                           min_dist=min_dist,
+                           manual_edit=manual_edit)
         # todo: allow for editing the ommatidia coordinates
         if manual_edit:
             fix_ommatidia = OmmatidiaGUI(img_arr=self.image, coords_arr=self.ommatidial_inds)
@@ -2681,9 +2687,8 @@ class CTStack(Stack):
                         # for our raster image
                         dists_tree = spatial.KDTree(sub_segment.polar[:, :2])
                         dists, inds = dists_tree.query((sub_segment.polar[:, :2]), k=2)
-                        min_distance = 2 * np.max(dists[:, 1])
-                        raster, (theta_vals, phi_vals) = sub_segment.rasterize(
-                            image_size=image_size, pixel_length=min_distance)
+                        min_distance = np.max(dists[:, 1])/2
+                        raster, (theta_vals, phi_vals) = sub_segment.rasterize(image_size=image_size, pixel_length=min_distance)
                         pixel_size = phi_vals[1] - phi_vals[0]
                         # generate a boolean mask by smoothing the thresholded raster image
                         mask = raster > 0
@@ -2696,17 +2701,16 @@ class CTStack(Stack):
                         raster = raster.astype('uint8')
                         # use the ODA 2D to find ommatidial centers
                         eye = Eye(arr=raster, pixel_size=pixel_size, mask_arr=mask, mask_fn=None)
+                        if min_dist == 0:
+                            min_dist = 2 * min_distance
                         eye.oda(plot=False, square_lattice=False, bright_peak=True,
                                 regular=regular, manual_edit=manual_edit, min_dist=min_dist)
                         centers = eye.ommatidia
-                        if len(centers) > 100:
-                            breakpoint()
                         # test: plot the centers on the raster image
                         # center_inds = eye.ommatidial_inds
                         # plt.imshow(raster, cmap='gray')
                         # plt.scatter(center_inds[:, 1], center_inds[:, 0], c='r')
                         # plt.show()
-
                         # TODO: fix bug resulting in one HUGE segment of points. this is compressing
                         # the raster image or warping it due to the curvature and affecting the ODA.
                         # Basically, make sure that the segments are evenly partitioned
